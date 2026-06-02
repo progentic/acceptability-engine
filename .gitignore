@@ -1,0 +1,68 @@
+# Rust build artifacts
+/target/
+**/*.rs.bk
+*.pdb
+
+# Cargo
+# Note: Commit Cargo.lock for binary crates like this one. Uncomment if this becomes a library.
+/Cargo.lock
+
+# IDE / Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Runtime databases - evidence store
+evidence.db
+evidence.db-journal
+evidence.db-wal
+evidence.db-shm
+*.db
+*.sqlite
+*.sqlite3
+
+# Workspace directories created by Gate 2
+/scratch_workspace/
+/tmp/workspaces/
+/workspaces/
+workspace_root/
+
+# Test artifacts and logs
+/cargo-test-*.log
+*.log
+/tmp/
+*.tmp
+
+# HTTP server uploads/downloads (if added later)
+/uploads/
+/downloads/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS generated files
+Thumbs.db
+ehthumbs.db
+
+# Build output for distribution
+/dist/
+/out/
+
+# Backup files
+*.bak
+*.orig
+*.rej
+
+# Coverage reports (when Gate 8 adds tarpaulin)
+/cobertura.xml
+/tarpaulin-report.html
+/coverage/
+
+# Cargo audit/deny (when Gate 8 adds supply chain)
+/audit.toml
+/deny.toml
