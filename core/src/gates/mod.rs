@@ -1,0 +1,10 @@
+pub mod result;
+pub mod runner;
+pub mod process;
+pub mod gate01_contract;
+pub mod gate02_workspace;
+pub mod gate03_boundary;
+pub mod gate04_formatting;
+pub mod gate05_static_checks;
+pub mod gate06_build;
+pub mod gate07_tests;
