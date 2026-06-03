@@ -21,9 +21,10 @@ pub fn update_run_status(conn: &Connection, run_id: i64, status: &str) -> Result
 }
 
 pub fn create_attempt(conn: &Connection, run_id: i64) -> Result<i64, StoreError> {
+    let attempt_number = next_attempt_number(conn, run_id)?;
     conn.execute(
-        "INSERT INTO attempts (run_id, status, created_at) VALUES (?1, ?2, ?3)",
-        rusqlite::params![run_id, "RUNNING", current_unix_seconds()?],
+        "INSERT INTO attempts (run_id, attempt_number, status, created_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![run_id, attempt_number, "RUNNING", current_unix_seconds()?],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(conn.last_insert_rowid())
@@ -68,4 +69,15 @@ fn insert_run(conn: &Connection, contract: &Contract, status: &str) -> Result<()
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(())
+}
+
+fn next_attempt_number(conn: &Connection, run_id: i64) -> Result<i64, StoreError> {
+    let latest: Option<i64> = conn
+        .query_row(
+            "SELECT MAX(attempt_number) FROM attempts WHERE run_id = ?1",
+            rusqlite::params![run_id],
+            |row| row.get(0),
+        )
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    Ok(latest.unwrap_or(0) + 1)
 }

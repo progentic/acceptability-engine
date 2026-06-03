@@ -54,7 +54,9 @@ fn fetch_latest_attempt_gates(
 
 fn fetch_latest_attempt_id(conn: &Connection, run_id: i64) -> Result<Option<i64>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id FROM attempts WHERE run_id = ?1 ORDER BY id DESC LIMIT 1")
+        .prepare(
+            "SELECT id FROM attempts WHERE run_id = ?1 ORDER BY attempt_number DESC, id DESC LIMIT 1",
+        )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
         .query(rusqlite::params![run_id])

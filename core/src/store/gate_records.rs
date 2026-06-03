@@ -20,7 +20,7 @@ pub fn record_gate_run(
     conn: &Connection,
     attempt_id: i64,
     output: &GateOutput,
-) -> Result<(), StoreError> {
+) -> Result<i64, StoreError> {
     insert_gate_record(conn, attempt_id, &gate_record_from_output(output))
 }
 
@@ -84,7 +84,7 @@ fn insert_gate_record(
     conn: &Connection,
     attempt_id: i64,
     record: &GateRecord<'_>,
-) -> Result<(), StoreError> {
+) -> Result<i64, StoreError> {
     conn.execute(
         "INSERT INTO gate_runs (
             attempt_id, gate_num, passed, message, exit_code, duration_ms, 
@@ -106,5 +106,5 @@ fn insert_gate_record(
         ],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
-    Ok(())
+    Ok(conn.last_insert_rowid())
 }

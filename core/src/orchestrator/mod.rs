@@ -6,7 +6,7 @@ use crate::gates::result::GateOutput;
 use crate::gates::runner::run_gates_sequential;
 use crate::store::{
     create_attempt, create_evidence_bundle, create_run, record_final_decision, record_gate_run,
-    update_attempt_status, update_run_status, with_connection, SharedConnection,
+    update_attempt_status, update_run_status, with_connection, with_transaction, SharedConnection,
 };
 use state_machine::{FinalDecision, Run};
 use std::path::PathBuf;
@@ -30,7 +30,13 @@ pub async fn execute_existing_run(
     let attempt_id = create_run_attempt(&db, run_id).await?;
     let requires_human_review = contract.requires_human_review;
     let run_context = build_run_context(contract, workspace);
-    let gate_outputs = run_gates_sequential(&run_context).await?;
+    let gate_outputs = match run_gates_sequential(&run_context).await {
+        Ok(outputs) => outputs,
+        Err(error) => {
+            mark_attempt_error(&db, attempt_id).await?;
+            return Err(error.into());
+        }
+    };
     let final_decision = decide_from_gate_outputs(&gate_outputs, requires_human_review);
 
     finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision).await?;
@@ -55,6 +61,16 @@ async fn mark_run_running(db: &SharedConnection, run_id: i64) -> Result<(), Orch
 
 async fn create_run_attempt(db: &SharedConnection, run_id: i64) -> Result<i64, OrchestratorError> {
     Ok(with_connection(db.clone(), move |conn| create_attempt(conn, run_id)).await?)
+}
+
+async fn mark_attempt_error(
+    db: &SharedConnection,
+    attempt_id: i64,
+) -> Result<(), OrchestratorError> {
+    Ok(with_connection(db.clone(), move |conn| {
+        update_attempt_status(conn, attempt_id, "ERROR")
+    })
+    .await?)
 }
 
 fn build_run_context(contract: Contract, workspace: PathBuf) -> Run {
@@ -93,13 +109,15 @@ async fn finalize_run_record(
 ) -> Result<(), OrchestratorError> {
     let gate_outputs = gate_outputs.to_vec();
     let status = final_status(final_decision);
+    let attempt_status = final_attempt_status(final_decision);
     let final_decision_record = persisted_final_decision(final_decision);
     Ok(with_connection(db.clone(), move |conn| {
-        record_gate_outputs(conn, attempt_id, &gate_outputs)?;
-        create_evidence_bundle(conn, attempt_id)?;
-        update_attempt_status(conn, attempt_id, status)?;
-        update_run_status(conn, run_id, status)?;
-        record_persisted_final_decision(conn, run_id, final_decision_record)
+        with_transaction(conn, |transaction| {
+            record_gate_outputs(transaction, run_id, attempt_id, &gate_outputs)?;
+            update_attempt_status(transaction, attempt_id, attempt_status)?;
+            update_run_status(transaction, run_id, status)?;
+            record_persisted_final_decision(transaction, run_id, final_decision_record)
+        })
     })
     .await?)
 }
@@ -109,6 +127,13 @@ fn final_status(final_decision: &FinalDecision) -> &'static str {
         FinalDecision::Approve => "APPROVED",
         FinalDecision::PendingHumanReview => "PENDING_HUMAN_REVIEW",
         FinalDecision::Reject { .. } => "REJECTED",
+    }
+}
+
+fn final_attempt_status(final_decision: &FinalDecision) -> &'static str {
+    match final_decision {
+        FinalDecision::Approve | FinalDecision::PendingHumanReview => "PASSED",
+        FinalDecision::Reject { .. } => "FAILED",
     }
 }
 
@@ -136,11 +161,13 @@ fn record_persisted_final_decision(
 
 fn record_gate_outputs(
     conn: &crate::store::Connection,
+    run_id: i64,
     attempt_id: i64,
     gate_outputs: &[GateOutput],
 ) -> Result<(), crate::error::StoreError> {
     for output in gate_outputs {
-        record_gate_run(conn, attempt_id, output)?;
+        let gate_run_id = record_gate_run(conn, attempt_id, output)?;
+        create_evidence_bundle(conn, run_id, Some(attempt_id), Some(gate_run_id))?;
     }
     Ok(())
 }
@@ -230,6 +257,7 @@ mod tests {
         assert_eq!(summary.gates.len(), 1);
         assert_eq!(final_decision_count(&db, run_id).await, 1);
         assert_eq!(evidence_bundle_count(&db, attempt_id).await, 1);
+        assert_eq!(gate_evidence_link_count(&db, attempt_id).await, 1);
     }
 
     #[tokio::test]
@@ -255,6 +283,48 @@ mod tests {
         assert_eq!(summary.gates.len(), 1);
         assert_eq!(final_decision_count(&db, run_id).await, 0);
         assert_eq!(evidence_bundle_count(&db, attempt_id).await, 1);
+        assert_eq!(gate_evidence_link_count(&db, attempt_id).await, 1);
+    }
+
+    #[tokio::test]
+    async fn passing_non_human_review_run_gets_approved_final_decision() {
+        let db = shared_connection(open(":memory:").unwrap());
+        let contract = valid_contract();
+        let run_id = create_run_record(&db, &contract).await.unwrap();
+        let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
+        let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
+        let final_decision = decide_from_gate_outputs(&gate_outputs, false);
+
+        finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision)
+            .await
+            .unwrap();
+
+        let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(summary.status, "APPROVED");
+        assert_eq!(attempt_status(&db, attempt_id).await, "PASSED");
+        assert_eq!(final_decision_count(&db, run_id).await, 1);
+    }
+
+    #[tokio::test]
+    async fn duplicate_final_decision_rolls_back_finalization() {
+        let db = shared_connection(open(":memory:").unwrap());
+        let contract = valid_contract();
+        let run_id = create_run_record(&db, &contract).await.unwrap();
+        let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
+        let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
+        let final_decision = decide_from_gate_outputs(&gate_outputs, false);
+        insert_final_decision(&db, run_id).await;
+
+        let result =
+            finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision).await;
+
+        assert!(result.is_err());
+        assert_eq!(attempt_status(&db, attempt_id).await, "RUNNING");
+        assert_eq!(evidence_bundle_count(&db, attempt_id).await, 0);
+        assert_eq!(latest_summary_gate_count(&db, run_id).await, 0);
     }
 
     #[tokio::test]
@@ -298,5 +368,53 @@ mod tests {
         })
         .await
         .unwrap()
+    }
+
+    async fn gate_evidence_link_count(db: &SharedConnection, attempt_id: i64) -> i64 {
+        with_connection(db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*)
+                 FROM evidence_bundles
+                 WHERE attempt_id = ?1
+                   AND run_id IS NOT NULL
+                   AND gate_run_id IS NOT NULL",
+                rusqlite::params![attempt_id],
+                |row| row.get(0),
+            )
+            .map_err(|source| crate::error::StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn attempt_status(db: &SharedConnection, attempt_id: i64) -> String {
+        with_connection(db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT status FROM attempts WHERE id = ?1",
+                rusqlite::params![attempt_id],
+                |row| row.get(0),
+            )
+            .map_err(|source| crate::error::StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn insert_final_decision(db: &SharedConnection, run_id: i64) {
+        with_connection(db.clone(), move |conn| {
+            crate::store::record_final_decision(conn, run_id, "APPROVED", None)?;
+            Ok(())
+        })
+        .await
+        .unwrap();
+    }
+
+    async fn latest_summary_gate_count(db: &SharedConnection, run_id: i64) -> usize {
+        with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap()
+            .gates
+            .len()
     }
 }

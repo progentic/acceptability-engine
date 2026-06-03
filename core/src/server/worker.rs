@@ -1,5 +1,5 @@
 use crate::contract::Contract;
-use crate::orchestrator::execute_existing_run;
+use crate::orchestrator::{execute_existing_run, state_machine::FinalDecision};
 use crate::store::{update_run_status, with_connection, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
@@ -50,12 +50,16 @@ async fn process_run_queue(db: SharedConnection, mut receiver: RunQueueReceiver)
 
 async fn process_run_work(db: SharedConnection, work: RunWork) {
     let run_id = work.run_id;
-    if execute_existing_run(db.clone(), work.run_id, work.contract, work.workspace)
-        .await
-        .is_err()
-    {
+    let result = execute_existing_run(db.clone(), work.run_id, work.contract, work.workspace).await;
+    if should_mark_internal_failure(&result) {
         mark_run_failed_internal(&db, run_id).await;
     }
+}
+
+fn should_mark_internal_failure(
+    result: &Result<FinalDecision, crate::error::OrchestratorError>,
+) -> bool {
+    result.is_err()
 }
 
 pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: i64) {
@@ -88,5 +92,12 @@ mod tests {
 
         let queued = receiver.recv().await.unwrap();
         assert_eq!(queued.run_id, 1);
+    }
+
+    #[test]
+    fn pending_human_review_is_successful_worker_completion() {
+        let result = Ok(FinalDecision::PendingHumanReview);
+
+        assert!(!should_mark_internal_failure(&result));
     }
 }

@@ -9,14 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Run Attempts Table** - Added an `attempts` table so each run execution has a durable attempt identity
+- **Attempt Numbering** - Added deterministic `attempt_number` sequencing for run attempts
 - **Final Decisions Table** - Added `final_decisions` with `UNIQUE(run_id)` for approved and rejected terminal outcomes
-- **Evidence Bundles Table** - Added `evidence_bundles` linked to stable attempt IDs after gate evidence is recorded
+- **Evidence Bundles Table** - Added `evidence_bundles` linked to run, attempt, and gate evidence IDs after gate evidence is recorded
 - **Human Review Suspension** - Added `PENDING_HUMAN_REVIEW` behavior when all gates pass and the contract requires human review
+- **Attempt Model Regression Coverage** - Added tests for legacy migration, latest-attempt summaries, final decision uniqueness, transactional rollback, gate evidence links, and worker pending-review success
 
 ### Changed
 - **Gate Run Ownership** - Changed `gate_runs` persistence from `run_id` ownership to `attempt_id` ownership
 - **Run Summaries** - Preserved run summary responses by loading gates from the latest attempt for each run
 - **Finalization Flow** - Approved and rejected outcomes now persist final decisions, while pending human review leaves final decision creation deferred
+- **Finalization Atomicity** - Gate recording, evidence bundle writes, attempt status, run status, and final decision writes now occur in one SQLite transaction
+- **Legacy Migration Safety** - Legacy gate evidence now migrates through attempt #1 for each existing run so old gate rows cannot be orphaned or assigned to later attempts
 
 ## [0.0.10] - 2026-06-03 - Runtime Supervision Hardening
 
