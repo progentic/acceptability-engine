@@ -7,6 +7,8 @@ pub enum ProcessError {
         #[source]
         source: std::io::Error,
     },
+    #[error("sub-process pipe was not available for {stream}")]
+    MissingPipe { stream: &'static str },
     #[error("sub-process command timed out after execution threshold of {duration_ms}ms")]
     Timeout { duration_ms: u64 },
     #[error("failed to wait on sub-process handle or collect concurrent I/O: {source}")]

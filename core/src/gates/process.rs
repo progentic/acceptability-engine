@@ -26,8 +26,8 @@ pub fn execute_with_timeout(
         .spawn()
         .map_err(|source| ProcessError::SpawnFailed { source })?;
 
-    let mut stdout_stream = child.stdout.take().unwrap();
-    let mut stderr_stream = child.stderr.take().unwrap();
+    let mut stdout_stream = take_stdout(&mut child)?;
+    let mut stderr_stream = take_stderr(&mut child)?;
 
     let stdout_worker = thread::spawn(move || -> Result<Vec<u8>, std::io::Error> {
         let mut buffer = Vec::new();
@@ -111,6 +111,20 @@ fn terminate_process_group(child: &Child) {
 
 #[cfg(not(unix))]
 fn terminate_process_group(_child: &Child) {}
+
+fn take_stdout(child: &mut Child) -> Result<std::process::ChildStdout, ProcessError> {
+    child
+        .stdout
+        .take()
+        .ok_or(ProcessError::MissingPipe { stream: "stdout" })
+}
+
+fn take_stderr(child: &mut Child) -> Result<std::process::ChildStderr, ProcessError> {
+    child
+        .stderr
+        .take()
+        .ok_or(ProcessError::MissingPipe { stream: "stderr" })
+}
 
 fn collect_output(
     worker: JoinHandle<Result<Vec<u8>, std::io::Error>>,

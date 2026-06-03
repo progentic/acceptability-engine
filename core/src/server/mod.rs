@@ -18,7 +18,7 @@ pub async fn run_server(
     port: u16,
 ) -> Result<(), std::io::Error> {
     let (sender, receiver) = run_queue();
-    spawn_run_worker(db.clone(), receiver);
+    let worker = spawn_run_worker(db.clone(), receiver);
     let state = AppState {
         db,
         run_queue: sender,
@@ -40,6 +40,30 @@ pub async fn run_server(
         "HTTP Network Control Plane online at http://{}",
         target_address
     );
-    axum::serve(tcp_listener, app).await?;
-    Ok(())
+    supervise_server(tcp_listener, app, worker).await
+}
+
+async fn supervise_server(
+    tcp_listener: tokio::net::TcpListener,
+    app: Router,
+    mut worker: worker::RunWorker,
+) -> Result<(), std::io::Error> {
+    tokio::select! {
+        server_result = axum::serve(tcp_listener, app) => {
+            worker.abort();
+            server_result
+        }
+        worker_result = worker.wait() => worker_exit_result(worker_result),
+    }
+}
+
+fn worker_exit_result(result: Result<(), tokio::task::JoinError>) -> Result<(), std::io::Error> {
+    match result {
+        Ok(()) => Err(std::io::Error::other(
+            "run worker stopped before server shutdown",
+        )),
+        Err(error) => Err(std::io::Error::other(format!(
+            "run worker task failed: {error}"
+        ))),
+    }
 }

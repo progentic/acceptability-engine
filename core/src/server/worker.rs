@@ -3,6 +3,7 @@ use crate::orchestrator::execute_existing_run;
 use crate::store::{update_run_status, with_connection, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
+use tokio::task::JoinHandle;
 
 pub const RUN_QUEUE_CAPACITY: usize = 64;
 
@@ -16,14 +17,29 @@ pub struct RunWork {
 pub type RunQueueSender = mpsc::Sender<RunWork>;
 pub type RunQueueReceiver = mpsc::Receiver<RunWork>;
 
+pub struct RunWorker {
+    handle: JoinHandle<()>,
+}
+
+impl RunWorker {
+    pub async fn wait(&mut self) -> Result<(), tokio::task::JoinError> {
+        (&mut self.handle).await
+    }
+
+    pub fn abort(&self) {
+        self.handle.abort();
+    }
+}
+
 pub fn run_queue() -> (RunQueueSender, RunQueueReceiver) {
     mpsc::channel(RUN_QUEUE_CAPACITY)
 }
 
-pub fn spawn_run_worker(db: SharedConnection, receiver: RunQueueReceiver) {
-    tokio::spawn(async move {
+pub fn spawn_run_worker(db: SharedConnection, receiver: RunQueueReceiver) -> RunWorker {
+    let handle = tokio::spawn(async move {
         process_run_queue(db, receiver).await;
     });
+    RunWorker { handle }
 }
 
 async fn process_run_queue(db: SharedConnection, mut receiver: RunQueueReceiver) {
