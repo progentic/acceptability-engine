@@ -7,6 +7,7 @@ pub fn create_evidence_bundle(
     run_id: i64,
     attempt_id: Option<i64>,
     gate_run_id: Option<i64>,
+    summary: &str,
 ) -> Result<i64, StoreError> {
     conn.execute(
         "INSERT INTO evidence_bundles (run_id, attempt_id, gate_run_id, summary, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -14,7 +15,7 @@ pub fn create_evidence_bundle(
             run_id,
             attempt_id,
             gate_run_id,
-            "gate telemetry captured",
+            summary,
             current_unix_seconds()?
         ],
     )

@@ -33,7 +33,7 @@ pub async fn execute_existing_run(
     let gate_outputs = match run_gates_sequential(&run_context).await {
         Ok(outputs) => outputs,
         Err(error) => {
-            mark_attempt_error(&db, attempt_id).await?;
+            finalize_internal_error(&db, run_id, attempt_id).await?;
             return Err(error.into());
         }
     };
@@ -63,12 +63,24 @@ async fn create_run_attempt(db: &SharedConnection, run_id: i64) -> Result<i64, O
     Ok(with_connection(db.clone(), move |conn| create_attempt(conn, run_id)).await?)
 }
 
-async fn mark_attempt_error(
+async fn finalize_internal_error(
     db: &SharedConnection,
+    run_id: i64,
     attempt_id: i64,
 ) -> Result<(), OrchestratorError> {
     Ok(with_connection(db.clone(), move |conn| {
-        update_attempt_status(conn, attempt_id, "ERROR")
+        with_transaction(conn, |transaction| {
+            update_attempt_status(transaction, attempt_id, "ERROR")?;
+            update_run_status(transaction, run_id, "FAILED_INTERNAL")?;
+            create_evidence_bundle(
+                transaction,
+                run_id,
+                Some(attempt_id),
+                None,
+                "engine error during gate execution",
+            )?;
+            Ok(())
+        })
     })
     .await?)
 }
@@ -167,7 +179,13 @@ fn record_gate_outputs(
 ) -> Result<(), crate::error::StoreError> {
     for output in gate_outputs {
         let gate_run_id = record_gate_run(conn, attempt_id, output)?;
-        create_evidence_bundle(conn, run_id, Some(attempt_id), Some(gate_run_id))?;
+        create_evidence_bundle(
+            conn,
+            run_id,
+            Some(attempt_id),
+            Some(gate_run_id),
+            "gate telemetry captured",
+        )?;
     }
     Ok(())
 }
@@ -328,6 +346,26 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn internal_error_finalizes_run_and_attempt() {
+        let db = shared_connection(open(":memory:").unwrap());
+        let contract = valid_contract();
+        let run_id = create_run_record(&db, &contract).await.unwrap();
+        let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
+
+        finalize_internal_error(&db, run_id, attempt_id)
+            .await
+            .unwrap();
+
+        let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(summary.status, "FAILED_INTERNAL");
+        assert_eq!(attempt_status(&db, attempt_id).await, "ERROR");
+        assert_eq!(engine_error_evidence_count(&db, attempt_id).await, 1);
+    }
+
+    #[tokio::test]
     async fn marks_queued_run_running_before_execution() {
         let db = shared_connection(open(":memory:").unwrap());
         let contract = valid_contract();
@@ -416,5 +454,22 @@ mod tests {
             .unwrap()
             .gates
             .len()
+    }
+
+    async fn engine_error_evidence_count(db: &SharedConnection, attempt_id: i64) -> i64 {
+        with_connection(db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*)
+                 FROM evidence_bundles
+                 WHERE attempt_id = ?1
+                   AND gate_run_id IS NULL
+                   AND summary = 'engine error during gate execution'",
+                rusqlite::params![attempt_id],
+                |row| row.get(0),
+            )
+            .map_err(|source| crate::error::StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
     }
 }
