@@ -5,6 +5,7 @@ pub mod gate04_formatting;
 pub mod gate05_static_checks;
 pub mod gate06_build;
 pub mod gate07_tests;
+pub mod gate08_supply_chain;
 pub mod process;
 pub mod result;
 pub mod runner;

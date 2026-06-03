@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.7] - 2026-06-03 - Supply Chain Gate
+
+### Added
+- **Gate 8: Supply Chain** - Added a fail-fast supply-chain gate after tests
+- **Cargo Deny Check** - Gate 8 runs `cargo deny check` for policy, license, advisory, and ban checks
+- **Cargo Audit Scan** - Gate 8 runs `cargo audit` for RustSec advisory scanning after `cargo deny` succeeds
+- **Supply Chain Unit Coverage** - Added tests for command construction and successful evidence merging
+
+### Changed
+- **Gate Runner Capacity** - Expanded the sequential gate runner from seven to eight gates
+
+## [0.0.6] - 2026-06-03 - Process Group Timeout Cleanup
+
+### Added
+- **Process Group Isolation** - Gate commands now launch in their own Unix process group before execution
+- **Descendant Timeout Test** - Added regression coverage proving timeout cleanup kills child processes spawned by a shell command
+
+### Changed
+- **Timeout Cleanup** - Timeout handling now sends `SIGKILL` to the process group, falls back to direct child kill, reaps the process, and joins stdout/stderr reader threads
+
 ## [0.0.5] - 2026-06-03 - Local Workspace Mode Lock
 
 ### Added

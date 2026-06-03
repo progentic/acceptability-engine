@@ -1,8 +1,9 @@
 use crate::error::process::ProcessError;
 use crate::gates::result::ExecutionResult;
 use std::io::Read;
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::thread;
+use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use wait_timeout::ChildExt;
 
@@ -14,6 +15,8 @@ pub fn execute_with_timeout(
     timeout_duration: Duration,
 ) -> Result<ExecutionResult, ProcessError> {
     let start_instant = Instant::now();
+
+    configure_process_group(&mut command);
 
     let mut child = command
         .stdout(Stdio::piped())
@@ -39,8 +42,9 @@ pub fn execute_with_timeout(
     let exit_status = match child.wait_timeout(timeout_duration) {
         Ok(Some(status)) => status,
         Ok(None) => {
-            let _ = child.kill();
-            let _ = child.wait();
+            terminate_process_tree(&mut child);
+            let _ = collect_output(stdout_worker, "stdout")?;
+            let _ = collect_output(stderr_worker, "stderr")?;
             return Err(ProcessError::Timeout {
                 duration_ms: timeout_duration.as_millis() as u64,
             });
@@ -51,19 +55,8 @@ pub fn execute_with_timeout(
     let elapsed_ms = start_instant.elapsed().as_millis() as u64;
     let exit_code = exit_status.code().unwrap_or(-1);
 
-    let stdout_buffer = stdout_worker
-        .join()
-        .map_err(|_| ProcessError::WaitFailed {
-            source: std::io::Error::other("stdout reader panicked thread state"),
-        })?
-        .map_err(|source| ProcessError::WaitFailed { source })?;
-
-    let stderr_buffer = stderr_worker
-        .join()
-        .map_err(|_| ProcessError::WaitFailed {
-            source: std::io::Error::other("stderr reader panicked thread state"),
-        })?
-        .map_err(|source| ProcessError::WaitFailed { source })?;
+    let stdout_buffer = collect_output(stdout_worker, "stdout")?;
+    let stderr_buffer = collect_output(stderr_worker, "stderr")?;
 
     if exit_status.success() {
         return Ok(ExecutionResult::pass(
@@ -86,13 +79,56 @@ pub fn execute_with_timeout(
     ))
 }
 
+#[cfg(unix)]
+fn configure_process_group(command: &mut Command) {
+    use std::os::unix::process::CommandExt;
+    command.process_group(0);
+}
+
+#[cfg(not(unix))]
+fn configure_process_group(_command: &mut Command) {}
+
+fn terminate_process_tree(child: &mut Child) {
+    terminate_process_group(child);
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[cfg(unix)]
+fn terminate_process_group(child: &Child) {
+    const SIGKILL: i32 = 9;
+    unsafe extern "C" {
+        fn kill(pid: i32, sig: i32) -> i32;
+    }
+
+    let process_group_id = -(child.id() as i32);
+    unsafe {
+        let _ = kill(process_group_id, SIGKILL);
+    }
+}
+
+#[cfg(not(unix))]
+fn terminate_process_group(_child: &Child) {}
+
+fn collect_output(
+    worker: JoinHandle<Result<Vec<u8>, std::io::Error>>,
+    stream_name: &str,
+) -> Result<Vec<u8>, ProcessError> {
+    worker
+        .join()
+        .map_err(|_| ProcessError::WaitFailed {
+            source: std::io::Error::other(format!("{stream_name} reader panicked thread state")),
+        })?
+        .map_err(|source| ProcessError::WaitFailed { source })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
     use std::time::Duration;
 
     #[test]
-    #[ignore]
     fn test_process_timeout() {
         let mut cmd = Command::new("sleep");
         cmd.arg("10");
@@ -103,5 +139,27 @@ mod tests {
             result,
             Err(ProcessError::Timeout { duration_ms: 100 })
         ));
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn timeout_kills_descendant_processes() {
+        let marker_path = std::env::temp_dir().join("acceptability-engine-timeout-marker");
+        let _ = fs::remove_file(&marker_path);
+
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg(format!(
+            "(sleep 1; printf done > {}) & wait",
+            marker_path.to_string_lossy()
+        ));
+
+        let result = execute_with_timeout(cmd, 99, "pass", "fail", Duration::from_millis(100));
+        thread::sleep(Duration::from_millis(1200));
+
+        assert!(matches!(
+            result,
+            Err(ProcessError::Timeout { duration_ms: 100 })
+        ));
+        assert!(!marker_path.exists());
     }
 }

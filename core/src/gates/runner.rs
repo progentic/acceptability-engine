@@ -3,7 +3,7 @@ use crate::gates::result::GateOutput;
 use crate::orchestrator::state_machine::Run;
 
 pub async fn run_gates_sequential(run: &Run) -> Result<Vec<GateOutput>, GateError> {
-    let mut results = Vec::with_capacity(7);
+    let mut results = Vec::with_capacity(8);
 
     let res1 = super::gate01_contract::run(run).await?;
     let passed1 = res1.passed;
@@ -51,6 +51,13 @@ pub async fn run_gates_sequential(run: &Run) -> Result<Vec<GateOutput>, GateErro
     let passed7 = res7.base.passed;
     results.push(GateOutput::Execution(res7));
     if !passed7 {
+        return Ok(results);
+    }
+
+    let res8 = super::gate08_supply_chain::run(run).await?;
+    let passed8 = res8.base.passed;
+    results.push(GateOutput::Execution(res8));
+    if !passed8 {
         return Ok(results);
     }
 
