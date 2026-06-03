@@ -1,5 +1,5 @@
 use super::worker::RunQueueSender;
-use crate::orchestrator::SharedConnection;
+use crate::store::SharedConnection;
 use std::path::PathBuf;
 
 #[derive(Clone)]

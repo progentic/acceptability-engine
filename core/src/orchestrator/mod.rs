@@ -4,13 +4,11 @@ use crate::contract::Contract;
 use crate::error::OrchestratorError;
 use crate::gates::result::GateOutput;
 use crate::gates::runner::run_gates_sequential;
-use crate::store::{create_run, record_gate_run, update_run_status, Connection};
+use crate::store::{
+    create_run, record_gate_run, update_run_status, with_connection, SharedConnection,
+};
 use state_machine::{FinalDecision, Run};
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-
-pub type SharedConnection = Arc<Mutex<Connection>>;
 
 pub async fn run_contract(
     db: SharedConnection,
@@ -41,13 +39,15 @@ async fn create_run_record(
     db: &SharedConnection,
     contract: &Contract,
 ) -> Result<i64, OrchestratorError> {
-    let conn = db.lock().await;
-    Ok(create_run(&conn, contract)?)
+    let contract = contract.clone();
+    Ok(with_connection(db.clone(), move |conn| create_run(conn, &contract)).await?)
 }
 
 async fn mark_run_running(db: &SharedConnection, run_id: i64) -> Result<(), OrchestratorError> {
-    let conn = db.lock().await;
-    Ok(update_run_status(&conn, run_id, "RUNNING")?)
+    Ok(with_connection(db.clone(), move |conn| {
+        update_run_status(conn, run_id, "RUNNING")
+    })
+    .await?)
 }
 
 fn build_run_context(contract: Contract, workspace: PathBuf) -> Run {
@@ -77,14 +77,29 @@ async fn finalize_run_record(
     gate_outputs: &[GateOutput],
     final_decision: &FinalDecision,
 ) -> Result<(), OrchestratorError> {
-    let conn = db.lock().await;
-    for output in gate_outputs {
-        record_gate_run(&conn, run_id, output)?;
-    }
+    let gate_outputs = gate_outputs.to_vec();
+    let status = final_status(final_decision);
+    Ok(with_connection(db.clone(), move |conn| {
+        record_gate_outputs(conn, run_id, &gate_outputs)?;
+        update_run_status(conn, run_id, status)
+    })
+    .await?)
+}
 
+fn final_status(final_decision: &FinalDecision) -> &'static str {
     match final_decision {
-        FinalDecision::Approve => update_run_status(&conn, run_id, "APPROVED")?,
-        FinalDecision::Reject { .. } => update_run_status(&conn, run_id, "REJECTED")?,
+        FinalDecision::Approve => "APPROVED",
+        FinalDecision::Reject { .. } => "REJECTED",
+    }
+}
+
+fn record_gate_outputs(
+    conn: &crate::store::Connection,
+    run_id: i64,
+    gate_outputs: &[GateOutput],
+) -> Result<(), crate::error::StoreError> {
+    for output in gate_outputs {
+        record_gate_run(conn, run_id, output)?;
     }
     Ok(())
 }
@@ -93,7 +108,7 @@ async fn finalize_run_record(
 mod tests {
     use super::*;
     use crate::gates::result::{GateOutput, GateResult};
-    use crate::store::{create_queued_run, fetch_run_summary, open};
+    use crate::store::{create_queued_run, fetch_run_summary, open, shared_connection};
     use std::path::PathBuf;
 
     fn valid_contract() -> Contract {
@@ -142,7 +157,7 @@ mod tests {
 
     #[tokio::test]
     async fn records_gate_outputs_and_final_status_together() {
-        let db = Arc::new(Mutex::new(open(":memory:").unwrap()));
+        let db = shared_connection(open(":memory:").unwrap());
         let contract = valid_contract();
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let gate_outputs = vec![GateOutput::Simple(GateResult::fail(
@@ -155,25 +170,28 @@ mod tests {
             .await
             .unwrap();
 
-        let conn = db.lock().await;
-        let summary = fetch_run_summary(&conn, run_id).unwrap().unwrap();
+        let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(summary.status, "REJECTED");
         assert_eq!(summary.gates.len(), 1);
     }
 
     #[tokio::test]
     async fn marks_queued_run_running_before_execution() {
-        let db = Arc::new(Mutex::new(open(":memory:").unwrap()));
+        let db = shared_connection(open(":memory:").unwrap());
         let contract = valid_contract();
-        let run_id = {
-            let conn = db.lock().await;
-            create_queued_run(&conn, &contract).unwrap()
-        };
+        let run_id = with_connection(db.clone(), move |conn| create_queued_run(conn, &contract))
+            .await
+            .unwrap();
 
         mark_run_running(&db, run_id).await.unwrap();
 
-        let conn = db.lock().await;
-        let summary = fetch_run_summary(&conn, run_id).unwrap().unwrap();
+        let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap();
         assert_eq!(summary.status, "RUNNING");
     }
 }

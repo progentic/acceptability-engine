@@ -24,4 +24,9 @@ pub enum StoreError {
     },
     #[error("invalid pagination parameter: {0}")]
     InvalidParameter(String),
+    #[error("database blocking task failed: {source}")]
+    BlockingTaskFailed {
+        #[source]
+        source: tokio::task::JoinError,
+    },
 }

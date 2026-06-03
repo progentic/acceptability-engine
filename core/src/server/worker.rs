@@ -1,6 +1,6 @@
 use crate::contract::Contract;
-use crate::orchestrator::{execute_existing_run, SharedConnection};
-use crate::store::update_run_status;
+use crate::orchestrator::execute_existing_run;
+use crate::store::{update_run_status, with_connection, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 
@@ -43,8 +43,10 @@ async fn process_run_work(db: SharedConnection, work: RunWork) {
 }
 
 pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: i64) {
-    let conn = db.lock().await;
-    let _ = update_run_status(&conn, run_id, "FAILED_INTERNAL");
+    let _ = with_connection(db.clone(), move |conn| {
+        update_run_status(conn, run_id, "FAILED_INTERNAL")
+    })
+    .await;
 }
 
 #[cfg(test)]

@@ -10,8 +10,6 @@ use contract::Contract;
 use error::ContractLoadError;
 use orchestrator::state_machine::FinalDecision;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Parser, Debug)]
 #[command(name = "accessibility-engine")]
@@ -47,7 +45,7 @@ async fn main() {
     };
 
     if let Some(listening_port) = args.port {
-        let shared_db = Arc::new(Mutex::new(raw_connection));
+        let shared_db = store::shared_connection(raw_connection);
         if let Err(server_error) =
             server::run_server(shared_db, args.workspace, listening_port).await
         {
@@ -81,7 +79,7 @@ async fn main() {
         contract_payload.id
     );
 
-    let shared_db = Arc::new(Mutex::new(raw_connection));
+    let shared_db = store::shared_connection(raw_connection);
     match orchestrator::run_contract(shared_db, contract_payload, args.workspace).await {
         Ok(FinalDecision::Approve) => {
             println!("SUCCESS: Contract evaluation approved.");

@@ -3,7 +3,8 @@ use super::worker::RunWork;
 use crate::contract::Contract;
 use crate::error::{StoreError, ValidationError};
 use crate::store::{
-    create_queued_run, fetch_run_summary, list_runs, update_run_status, RunListItem,
+    create_queued_run, fetch_run_summary, list_runs, update_run_status, with_connection,
+    RunListItem,
 };
 use axum::{
     extract::{Path as AxumPath, Query, State},
@@ -89,13 +90,12 @@ async fn create_queued_run_record(
     state: &AppState,
     contract: &Contract,
 ) -> Result<i64, (StatusCode, String)> {
-    let database_guard = state.db.lock().await;
-    create_queued_run(&database_guard, contract).map_err(|store_error| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to create queued run record: {}", store_error),
-        )
+    let contract = contract.clone();
+    with_connection(state.db.clone(), move |conn| {
+        create_queued_run(conn, &contract)
     })
+    .await
+    .map_err(internal_store_error("Failed to create queued run record"))
 }
 
 async fn enqueue_contract_run(
@@ -122,8 +122,10 @@ async fn enqueue_contract_run(
 }
 
 async fn mark_queued_run_failed(state: &AppState, run_id: i64) {
-    let database_guard = state.db.lock().await;
-    let _ = update_run_status(&database_guard, run_id, "FAILED_INTERNAL");
+    let _ = with_connection(state.db.clone(), move |conn| {
+        update_run_status(conn, run_id, "FAILED_INTERNAL")
+    })
+    .await;
 }
 
 #[cfg(test)]
@@ -161,9 +163,11 @@ pub async fn get_run_status(
     AxumPath(run_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<crate::store::RunStatusSummary>, (StatusCode, String)> {
-    let database_guard = state.db.lock().await;
-
-    match fetch_run_summary(&database_guard, run_id) {
+    match with_connection(state.db.clone(), move |conn| {
+        fetch_run_summary(conn, run_id)
+    })
+    .await
+    {
         Ok(Some(summary)) => Ok(Json(summary)),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
@@ -183,19 +187,26 @@ pub async fn list_runs_handler(
     State(state): State<AppState>,
     Query(query): Query<ListRunsQuery>,
 ) -> Result<Json<Vec<RunListItem>>, (StatusCode, String)> {
-    let database_guard = state.db.lock().await;
-
-    match list_runs(
-        &database_guard,
-        query.status.as_deref(),
-        query.limit,
-        query.offset,
-    ) {
+    let status_filter = query.status;
+    match with_connection(state.db.clone(), move |conn| {
+        list_runs(conn, status_filter.as_deref(), query.limit, query.offset)
+    })
+    .await
+    {
         Ok(items) => Ok(Json(items)),
         Err(StoreError::InvalidParameter(msg)) => Err((StatusCode::BAD_REQUEST, msg)),
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to query run list: {}", store_error),
         )),
+    }
+}
+
+fn internal_store_error(context: &'static str) -> impl FnOnce(StoreError) -> (StatusCode, String) {
+    move |store_error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{}: {}", context, store_error),
+        )
     }
 }

@@ -2,7 +2,7 @@ pub mod handlers;
 pub mod state;
 pub mod worker;
 
-use crate::orchestrator::SharedConnection;
+use crate::store::SharedConnection;
 use axum::{
     routing::{get, post},
     Router,
