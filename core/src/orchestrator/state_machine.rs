@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 pub enum FinalDecision {
     Approve,
+    PendingHumanReview,
     Reject { reason: String },
 }
 

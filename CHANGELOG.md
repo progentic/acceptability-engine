@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.11] - 2026-06-03 - Attempt Evidence Model
+
+### Added
+- **Run Attempts Table** - Added an `attempts` table so each run execution has a durable attempt identity
+- **Final Decisions Table** - Added `final_decisions` with `UNIQUE(run_id)` for approved and rejected terminal outcomes
+- **Evidence Bundles Table** - Added `evidence_bundles` linked to stable attempt IDs after gate evidence is recorded
+- **Human Review Suspension** - Added `PENDING_HUMAN_REVIEW` behavior when all gates pass and the contract requires human review
+
+### Changed
+- **Gate Run Ownership** - Changed `gate_runs` persistence from `run_id` ownership to `attempt_id` ownership
+- **Run Summaries** - Preserved run summary responses by loading gates from the latest attempt for each run
+- **Finalization Flow** - Approved and rejected outcomes now persist final decisions, while pending human review leaves final decision creation deferred
+
 ## [0.0.10] - 2026-06-03 - Runtime Supervision Hardening
 
 ### Added

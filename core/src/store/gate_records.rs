@@ -18,10 +18,10 @@ struct GateRecord<'a> {
 
 pub fn record_gate_run(
     conn: &Connection,
-    run_id: i64,
+    attempt_id: i64,
     output: &GateOutput,
 ) -> Result<(), StoreError> {
-    insert_gate_record(conn, run_id, &gate_record_from_output(output))
+    insert_gate_record(conn, attempt_id, &gate_record_from_output(output))
 }
 
 fn gate_record_from_output(output: &GateOutput) -> GateRecord<'_> {
@@ -82,16 +82,16 @@ fn parse_errors(metrics: Option<&TestMetrics>) -> Option<u32> {
 
 fn insert_gate_record(
     conn: &Connection,
-    run_id: i64,
+    attempt_id: i64,
     record: &GateRecord<'_>,
 ) -> Result<(), StoreError> {
     conn.execute(
         "INSERT INTO gate_runs (
-            run_id, gate_num, passed, message, exit_code, duration_ms, 
+            attempt_id, gate_num, passed, message, exit_code, duration_ms, 
             stdout, stderr, test_passed, test_failed, test_ignored, parse_errors
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
-            run_id,
+            attempt_id,
             record.gate_num,
             record.passed as i32,
             record.message,

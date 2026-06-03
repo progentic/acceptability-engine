@@ -1,7 +1,7 @@
+use super::clock::current_unix_seconds;
 use crate::contract::Contract;
 use crate::error::StoreError;
 use rusqlite::Connection;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub fn create_run(conn: &Connection, contract: &Contract) -> Result<i64, StoreError> {
     create_run_with_status(conn, contract, "RUNNING")
@@ -15,6 +15,28 @@ pub fn update_run_status(conn: &Connection, run_id: i64, status: &str) -> Result
     conn.execute(
         "UPDATE runs SET status = ?1 WHERE id = ?2",
         rusqlite::params![status, run_id],
+    )
+    .map_err(|source| StoreError::InsertFailed { source })?;
+    Ok(())
+}
+
+pub fn create_attempt(conn: &Connection, run_id: i64) -> Result<i64, StoreError> {
+    conn.execute(
+        "INSERT INTO attempts (run_id, status, created_at) VALUES (?1, ?2, ?3)",
+        rusqlite::params![run_id, "RUNNING", current_unix_seconds()?],
+    )
+    .map_err(|source| StoreError::InsertFailed { source })?;
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn update_attempt_status(
+    conn: &Connection,
+    attempt_id: i64,
+    status: &str,
+) -> Result<(), StoreError> {
+    conn.execute(
+        "UPDATE attempts SET status = ?1 WHERE id = ?2",
+        rusqlite::params![status, attempt_id],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(())
@@ -46,14 +68,4 @@ fn insert_run(conn: &Connection, contract: &Contract, status: &str) -> Result<()
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(())
-}
-
-fn current_unix_seconds() -> Result<i64, StoreError> {
-    let duration =
-        SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| StoreError::MigrationFailed {
-                source: rusqlite::Error::ExecuteReturnedResults,
-            })?;
-    Ok(duration.as_secs() as i64)
 }

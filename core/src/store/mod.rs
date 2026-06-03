@@ -1,4 +1,7 @@
+mod clock;
 mod connection;
+mod evidence;
+mod final_decisions;
 mod gate_records;
 mod mappers;
 mod queries;
@@ -7,9 +10,13 @@ mod schema;
 mod types;
 
 pub use connection::{open, shared_connection, with_connection, SharedConnection};
+pub use evidence::create_evidence_bundle;
+pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
 pub use queries::{fetch_run_summary, list_runs};
-pub use runs::{create_queued_run, create_run, update_run_status};
+pub use runs::{
+    create_attempt, create_queued_run, create_run, update_attempt_status, update_run_status,
+};
 pub use rusqlite::Connection;
 pub use types::{RunListItem, RunStatusSummary};
 

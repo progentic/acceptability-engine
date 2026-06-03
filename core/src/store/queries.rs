@@ -12,7 +12,7 @@ pub fn fetch_run_summary(
     let Some(mut summary) = fetch_run_header(conn, run_id)? else {
         return Ok(None);
     };
-    summary.gates = fetch_gate_summaries(conn, run_id)?;
+    summary.gates = fetch_latest_attempt_gates(conn, run_id)?;
     Ok(Some(summary))
 }
 
@@ -42,12 +42,40 @@ fn fetch_run_header(
     Ok(Some(run_summary_from_row(row)?))
 }
 
-fn fetch_gate_summaries(conn: &Connection, run_id: i64) -> Result<Vec<GateRunSummary>, StoreError> {
+fn fetch_latest_attempt_gates(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Vec<GateRunSummary>, StoreError> {
+    let Some(attempt_id) = fetch_latest_attempt_id(conn, run_id)? else {
+        return Ok(Vec::new());
+    };
+    fetch_gate_summaries(conn, attempt_id)
+}
+
+fn fetch_latest_attempt_id(conn: &Connection, run_id: i64) -> Result<Option<i64>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT gate_num, passed, message, exit_code, duration_ms FROM gate_runs WHERE run_id = ?1 ORDER BY gate_num ASC")
+        .prepare("SELECT id FROM attempts WHERE run_id = ?1 ORDER BY id DESC LIMIT 1")
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    let mut rows = stmt
+        .query(rusqlite::params![run_id])
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    let Some(row) = next_row(&mut rows)? else {
+        return Ok(None);
+    };
+    row.get(0)
+        .map(Some)
+        .map_err(|source| StoreError::QueryFailed { source })
+}
+
+fn fetch_gate_summaries(
+    conn: &Connection,
+    attempt_id: i64,
+) -> Result<Vec<GateRunSummary>, StoreError> {
+    let mut stmt = conn
+        .prepare("SELECT gate_num, passed, message, exit_code, duration_ms FROM gate_runs WHERE attempt_id = ?1 ORDER BY gate_num ASC")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![attempt_id])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_gate_summaries(rows)
 }

@@ -85,6 +85,10 @@ async fn main() {
             println!("SUCCESS: Contract evaluation approved.");
             std::process::exit(0);
         }
+        Ok(FinalDecision::PendingHumanReview) => {
+            println!("PENDING: Contract evaluation requires human review.");
+            std::process::exit(0);
+        }
         Ok(FinalDecision::Reject { reason }) => {
             println!(
                 "REJECTED: Contract validation failed checks. Reason: {}",
