@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.15] - 2026-06-03 - Evidence Store Descriptors
+
+### Added
+- **Evidence Artifact Descriptors** - Added `kind`, `label`, `storage_uri`, `sha256`, `byte_len`, and `content_type` metadata to evidence bundles
+- **Descriptor Evidence Writes** - Added a descriptor-based evidence insert path while preserving the summary evidence helper used by orchestration
+- **Production Query Indexes** - Added indexes for run status listing, contract lookup, attempt ordering, gate lookup, and evidence lookup paths
+- **Evidence Descriptor Coverage** - Added tests for rich descriptor reads and production index creation
+
+### Changed
+- **Evidence Read API Shape** - Extended run evidence responses with artifact descriptor metadata while preserving run, attempt, gate, summary, and timestamp fields
+- **Evidence Migration Safety** - Existing evidence bundle rows now receive descriptor defaults during schema normalization
+
 ## [0.0.14] - 2026-06-03 - Typed Orchestration IDs
 
 ### Added

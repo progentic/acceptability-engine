@@ -140,6 +140,12 @@ pub struct EvidenceBundleSummary {
     pub run_id: RunId,
     pub attempt_id: Option<AttemptId>,
     pub gate_run_id: Option<GateRunId>,
+    pub kind: String,
+    pub label: String,
+    pub storage_uri: Option<String>,
+    pub sha256: Option<String>,
+    pub byte_len: Option<i64>,
+    pub content_type: Option<String>,
     pub summary: String,
     pub created_at: i64,
 }

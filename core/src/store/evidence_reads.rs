@@ -29,7 +29,8 @@ fn query_run_evidence(
 ) -> Result<Vec<EvidenceBundleSummary>, StoreError> {
     let mut stmt = conn
         .prepare(
-            "SELECT id, run_id, attempt_id, gate_run_id, summary, created_at
+            "SELECT id, run_id, attempt_id, gate_run_id, kind, label, storage_uri,
+                    sha256, byte_len, content_type, summary, created_at
              FROM evidence_bundles
              WHERE run_id = ?1
              ORDER BY created_at ASC, id ASC",

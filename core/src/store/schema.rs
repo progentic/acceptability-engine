@@ -6,6 +6,7 @@ pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     normalize_attempts_table(conn)?;
     migrate_gate_runs_table(conn)?;
     normalize_evidence_bundles_table(conn)?;
+    create_query_indexes(conn)?;
     Ok(())
 }
 
@@ -188,12 +189,15 @@ fn normalize_evidence_bundles_table(conn: &Connection) -> Result<(), StoreError>
     if !table_exists(conn, "evidence_bundles")? {
         return create_evidence_bundles_table(conn);
     }
-    if table_has_column(conn, "evidence_bundles", "run_id")?
-        && table_has_column(conn, "evidence_bundles", "gate_run_id")?
-    {
-        return Ok(());
+    if !has_current_evidence_link_columns(conn)? {
+        return rebuild_evidence_bundles(conn);
     }
-    rebuild_evidence_bundles(conn)
+    add_missing_evidence_descriptor_columns(conn)
+}
+
+fn has_current_evidence_link_columns(conn: &Connection) -> Result<bool, StoreError> {
+    Ok(table_has_column(conn, "evidence_bundles", "run_id")?
+        && table_has_column(conn, "evidence_bundles", "gate_run_id")?)
 }
 
 fn create_evidence_bundles_table(conn: &Connection) -> Result<(), StoreError> {
@@ -203,6 +207,12 @@ fn create_evidence_bundles_table(conn: &Connection) -> Result<(), StoreError> {
              run_id INTEGER NOT NULL,
              attempt_id INTEGER,
              gate_run_id INTEGER,
+             kind TEXT NOT NULL DEFAULT 'summary',
+             label TEXT NOT NULL DEFAULT 'Evidence summary',
+             storage_uri TEXT,
+             sha256 TEXT,
+             byte_len INTEGER,
+             content_type TEXT,
              summary TEXT NOT NULL,
              created_at INTEGER NOT NULL,
              FOREIGN KEY(run_id) REFERENCES runs(id),
@@ -223,6 +233,12 @@ fn rebuild_evidence_bundles(conn: &Connection) -> Result<(), StoreError> {
              run_id INTEGER NOT NULL,
              attempt_id INTEGER,
              gate_run_id INTEGER,
+             kind TEXT NOT NULL DEFAULT 'summary',
+             label TEXT NOT NULL DEFAULT 'Evidence summary',
+             storage_uri TEXT,
+             sha256 TEXT,
+             byte_len INTEGER,
+             content_type TEXT,
              summary TEXT NOT NULL,
              created_at INTEGER NOT NULL,
              FOREIGN KEY(run_id) REFERENCES runs(id),
@@ -230,12 +246,16 @@ fn rebuild_evidence_bundles(conn: &Connection) -> Result<(), StoreError> {
              FOREIGN KEY(gate_run_id) REFERENCES gate_runs(id)
          );
 
-         INSERT INTO evidence_bundles (id, run_id, attempt_id, gate_run_id, summary, created_at)
+         INSERT INTO evidence_bundles (
+             id, run_id, attempt_id, gate_run_id, kind, label, summary, created_at
+         )
          SELECT
              legacy_evidence_bundles.id,
              attempts.run_id,
              legacy_evidence_bundles.attempt_id,
              NULL,
+             'summary',
+             legacy_evidence_bundles.summary,
              legacy_evidence_bundles.summary,
              legacy_evidence_bundles.created_at
          FROM legacy_evidence_bundles
@@ -243,6 +263,79 @@ fn rebuild_evidence_bundles(conn: &Connection) -> Result<(), StoreError> {
 
          DROP TABLE legacy_evidence_bundles;",
     )
+    .map_err(|source| StoreError::MigrationFailed { source })?;
+    Ok(())
+}
+
+fn add_missing_evidence_descriptor_columns(conn: &Connection) -> Result<(), StoreError> {
+    add_text_column_if_missing(
+        conn,
+        "evidence_bundles",
+        "kind",
+        "TEXT NOT NULL DEFAULT 'summary'",
+    )?;
+    add_text_column_if_missing(
+        conn,
+        "evidence_bundles",
+        "label",
+        "TEXT NOT NULL DEFAULT 'Evidence summary'",
+    )?;
+    add_text_column_if_missing(conn, "evidence_bundles", "storage_uri", "TEXT")?;
+    add_text_column_if_missing(conn, "evidence_bundles", "sha256", "TEXT")?;
+    add_integer_column_if_missing(conn, "evidence_bundles", "byte_len")?;
+    add_text_column_if_missing(conn, "evidence_bundles", "content_type", "TEXT")
+}
+
+fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {
+    conn.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_runs_status_created_at
+             ON runs(status, created_at);
+         CREATE INDEX IF NOT EXISTS idx_runs_contract_id
+             ON runs(contract_id);
+         CREATE INDEX IF NOT EXISTS idx_attempts_run_number
+             ON attempts(run_id, attempt_number);
+         CREATE INDEX IF NOT EXISTS idx_gate_runs_attempt_gate
+             ON gate_runs(attempt_id, gate_num);
+         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_run_created_at
+             ON evidence_bundles(run_id, created_at);
+         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_attempt
+             ON evidence_bundles(attempt_id);
+         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_gate_run
+             ON evidence_bundles(gate_run_id);",
+    )
+    .map_err(|source| StoreError::MigrationFailed { source })?;
+    Ok(())
+}
+
+fn add_text_column_if_missing(
+    conn: &Connection,
+    table_name: &str,
+    column_name: &str,
+    definition: &str,
+) -> Result<(), StoreError> {
+    add_column_if_missing(conn, table_name, column_name, definition)
+}
+
+fn add_integer_column_if_missing(
+    conn: &Connection,
+    table_name: &str,
+    column_name: &str,
+) -> Result<(), StoreError> {
+    add_column_if_missing(conn, table_name, column_name, "INTEGER")
+}
+
+fn add_column_if_missing(
+    conn: &Connection,
+    table_name: &str,
+    column_name: &str,
+    definition: &str,
+) -> Result<(), StoreError> {
+    if table_has_column(conn, table_name, column_name)? {
+        return Ok(());
+    }
+    conn.execute_batch(&format!(
+        "ALTER TABLE {table_name} ADD COLUMN {column_name} {definition};"
+    ))
     .map_err(|source| StoreError::MigrationFailed { source })?;
     Ok(())
 }

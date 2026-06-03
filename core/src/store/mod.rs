@@ -243,6 +243,56 @@ mod tests {
         assert_eq!(evidence.len(), 1);
         assert_eq!(evidence[0].attempt_id, Some(attempt_id));
         assert_eq!(evidence[0].gate_run_id, Some(gate_run_id));
+        assert_eq!(evidence[0].kind, "summary");
+        assert_eq!(evidence[0].label, "gate evidence captured");
+        assert!(evidence[0].storage_uri.is_none());
+    }
+
+    #[test]
+    fn lists_rich_evidence_bundle_descriptors() {
+        let conn = open(":memory:").unwrap();
+        let run_id = create_run(&conn, &test_contract("test-rich-evidence")).unwrap();
+        let attempt_id = create_attempt(&conn, run_id).unwrap();
+        evidence::create_evidence_bundle_record(
+            &conn,
+            evidence::EvidenceDescriptor {
+                run_id,
+                attempt_id: Some(attempt_id),
+                gate_run_id: None,
+                kind: "artifact",
+                label: "coverage report",
+                storage_uri: Some("file:///evidence/coverage.json"),
+                sha256: Some("abc123"),
+                byte_len: Some(42),
+                content_type: Some("application/json"),
+                summary: "coverage artifact captured",
+            },
+        )
+        .unwrap();
+
+        let evidence = list_run_evidence(&conn, run_id).unwrap().unwrap();
+
+        assert_eq!(evidence[0].kind, "artifact");
+        assert_eq!(evidence[0].label, "coverage report");
+        assert_eq!(
+            evidence[0].storage_uri.as_deref(),
+            Some("file:///evidence/coverage.json")
+        );
+        assert_eq!(evidence[0].sha256.as_deref(), Some("abc123"));
+        assert_eq!(evidence[0].byte_len, Some(42));
+        assert_eq!(
+            evidence[0].content_type.as_deref(),
+            Some("application/json")
+        );
+    }
+
+    #[test]
+    fn creates_production_query_indexes() {
+        let conn = open(":memory:").unwrap();
+
+        assert!(index_exists(&conn, "idx_runs_status_created_at"));
+        assert!(index_exists(&conn, "idx_gate_runs_attempt_gate"));
+        assert!(index_exists(&conn, "idx_evidence_bundles_run_created_at"));
     }
 
     #[test]
@@ -319,6 +369,16 @@ mod tests {
             row.get(0)
         })
         .unwrap()
+    }
+
+    fn index_exists(conn: &Connection, index_name: &str) -> bool {
+        conn.query_row(
+            "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = ?1",
+            rusqlite::params![index_name],
+            |row| row.get::<_, i64>(0),
+        )
+        .unwrap()
+            > 0
     }
 
     fn legacy_gate_attempt_number(conn: &Connection) -> i64 {

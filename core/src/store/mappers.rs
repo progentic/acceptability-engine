@@ -78,8 +78,14 @@ pub(super) fn evidence_bundle_summary_from_row(
         run_id: read_run_id(row, 1)?,
         attempt_id: read_optional_attempt_id(row, 2)?,
         gate_run_id: read_optional_gate_run_id(row, 3)?,
-        summary: read_column(row, 4)?,
-        created_at: read_column(row, 5)?,
+        kind: read_column(row, 4)?,
+        label: read_column(row, 5)?,
+        storage_uri: read_column(row, 6)?,
+        sha256: read_column(row, 7)?,
+        byte_len: read_column(row, 8)?,
+        content_type: read_column(row, 9)?,
+        summary: read_column(row, 10)?,
+        created_at: read_column(row, 11)?,
     })
 }
 
