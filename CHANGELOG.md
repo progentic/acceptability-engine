@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.10] - 2026-06-03 - Runtime Supervision Hardening
+
+### Added
+- **Run Worker Handle** - Added an explicit `RunWorker` handle around the background queue worker task
+- **Process Pipe Error Variant** - Added `ProcessError::MissingPipe` for missing subprocess stdout/stderr pipes
+
+### Changed
+- **Worker Lifecycle Management** - The HTTP server now supervises the run worker and reports worker termination instead of dropping the task handle
+- **Process Pipe Handling** - Replaced subprocess stdout/stderr `unwrap()` calls with predictable error returns
+
+## [0.0.9] - 2026-06-03 - Store Access Refactor
+
+### Added
+- **Blocking Store Access Helper** - Added a store helper that runs SQLite operations on Tokio's blocking thread pool
+- **Focused Store Modules** - Split store responsibilities into connection, schema, run writes, queries, row mappers, gate records, and DTO modules
+
+### Changed
+- **Async SQLite Boundary** - Moved direct SQLite work out of async request and orchestration futures
+- **Storage Abstraction Layout** - Preserved the public `crate::store` API while isolating SQL, mapping, and persistence concerns below it
+
 ## [0.0.8] - 2026-06-03 - Sandbox Runner Environment
 
 ### Added
