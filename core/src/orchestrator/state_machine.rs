@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use crate::contract::Contract;
+use std::path::PathBuf;
 
 pub enum FinalDecision {
     Approve,
@@ -7,7 +7,6 @@ pub enum FinalDecision {
 }
 
 pub struct Run {
-    pub run_id: i64,
     pub contract: Contract,
     pub workspace: PathBuf,
 }

@@ -54,14 +54,14 @@ pub fn execute_with_timeout(
     let stdout_buffer = stdout_worker
         .join()
         .map_err(|_| ProcessError::WaitFailed {
-            source: std::io::Error::new(std::io::ErrorKind::Other, "stdout reader panicked thread state"),
+            source: std::io::Error::other("stdout reader panicked thread state"),
         })?
         .map_err(|source| ProcessError::WaitFailed { source })?;
 
     let stderr_buffer = stderr_worker
         .join()
         .map_err(|_| ProcessError::WaitFailed {
-            source: std::io::Error::new(std::io::ErrorKind::Other, "stderr reader panicked thread state"),
+            source: std::io::Error::other("stderr reader panicked thread state"),
         })?
         .map_err(|source| ProcessError::WaitFailed { source })?;
 
@@ -97,13 +97,7 @@ mod tests {
         let mut cmd = Command::new("sleep");
         cmd.arg("10");
 
-        let result = execute_with_timeout(
-            cmd,
-            99,
-            "pass",
-            "fail",
-            Duration::from_millis(100)
-        );
+        let result = execute_with_timeout(cmd, 99, "pass", "fail", Duration::from_millis(100));
 
         assert!(matches!(
             result,

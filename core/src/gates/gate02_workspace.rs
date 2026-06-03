@@ -12,12 +12,15 @@ pub async fn run(run: &Run) -> Result<GateResult, GateError> {
     tokio::task::spawn_blocking(move || {
         ensure_workspace_exists(&workspace_path)?;
         validate_base_sha(&base_sha)?;
-        Ok(())
+        Ok::<(), GitError>(())
     })
     .await
     .map_err(|source| GateError::ExecutorJoinFailed { source })??;
 
-    Ok(GateResult::pass(2, "Workspace target verification successful"))
+    Ok(GateResult::pass(
+        2,
+        "Workspace target verification successful",
+    ))
 }
 
 fn ensure_workspace_exists(path: &Path) -> Result<(), GitError> {

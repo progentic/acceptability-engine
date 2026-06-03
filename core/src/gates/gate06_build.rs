@@ -10,8 +10,7 @@ pub async fn run(run: &Run) -> Result<ExecutionResult, GateError> {
 
     let result = tokio::task::spawn_blocking(move || {
         let mut cmd = Command::new("cargo");
-        cmd.arg("build")
-            .current_dir(&workspace_path);
+        cmd.arg("build").current_dir(&workspace_path);
 
         execute_with_timeout(
             cmd,

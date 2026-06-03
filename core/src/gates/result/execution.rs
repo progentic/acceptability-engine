@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use super::GateResult;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct TestMetrics {
