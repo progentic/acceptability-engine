@@ -31,6 +31,18 @@ pub async fn run_server(
             post(handlers::submit_contract).get(handlers::list_runs_handler),
         )
         .route("/runs/:id", get(handlers::get_run_status))
+        .route(
+            "/runs/:id/attempts",
+            get(handlers::list_run_attempts_handler),
+        )
+        .route(
+            "/runs/:id/evidence",
+            get(handlers::list_run_evidence_handler),
+        )
+        .route(
+            "/attempts/:id/gates",
+            get(handlers::list_attempt_gates_handler),
+        )
         .with_state(state);
 
     let target_address = SocketAddr::from(([0, 0, 0, 0], port));

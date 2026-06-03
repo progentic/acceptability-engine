@@ -1,6 +1,8 @@
+mod attempt_reads;
 mod clock;
 mod connection;
 mod evidence;
+mod evidence_reads;
 mod final_decisions;
 mod gate_records;
 mod mappers;
@@ -10,8 +12,10 @@ mod schema;
 mod transaction;
 mod types;
 
+pub use attempt_reads::{list_attempt_gates, list_run_attempts};
 pub use connection::{open, shared_connection, with_connection, SharedConnection};
 pub use evidence::create_evidence_bundle;
+pub use evidence_reads::list_run_evidence;
 pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
 pub use queries::{fetch_run_summary, list_runs};
@@ -20,7 +24,9 @@ pub use runs::{
 };
 pub use rusqlite::Connection;
 pub use transaction::with_transaction;
-pub use types::{RunListItem, RunStatusSummary};
+pub use types::{
+    AttemptGateDetail, AttemptSummary, EvidenceBundleSummary, RunListItem, RunStatusSummary,
+};
 
 #[cfg(test)]
 mod tests {
@@ -126,6 +132,119 @@ mod tests {
     }
 
     #[test]
+    fn lists_attempts_for_existing_run() {
+        let conn = open(":memory:").unwrap();
+        let run_id = create_run(&conn, &test_contract("test-attempt-list")).unwrap();
+        create_attempt(&conn, run_id).unwrap();
+        create_attempt(&conn, run_id).unwrap();
+
+        let attempts = list_run_attempts(&conn, run_id).unwrap().unwrap();
+
+        assert_eq!(attempts.len(), 2);
+        assert_eq!(attempts[0].attempt_number, 1);
+        assert_eq!(attempts[1].attempt_number, 2);
+    }
+
+    #[test]
+    fn returns_none_for_missing_run_attempts() {
+        let conn = open(":memory:").unwrap();
+
+        let attempts = list_run_attempts(&conn, 999).unwrap();
+
+        assert!(attempts.is_none());
+    }
+
+    #[test]
+    fn lists_attempt_gate_details() {
+        let conn = open(":memory:").unwrap();
+        let run_id = create_run(&conn, &test_contract("test-gate-details")).unwrap();
+        let attempt_id = create_attempt(&conn, run_id).unwrap();
+        let gate_run_id = record_gate_run(
+            &conn,
+            attempt_id,
+            &crate::gates::result::GateOutput::Execution(
+                crate::gates::result::ExecutionResult::pass(
+                    7,
+                    "tests passed",
+                    0,
+                    15,
+                    b"stdout".to_vec(),
+                    b"stderr".to_vec(),
+                ),
+            ),
+        )
+        .unwrap();
+
+        let gates = list_attempt_gates(&conn, attempt_id).unwrap().unwrap();
+
+        assert_eq!(gates.len(), 1);
+        assert_eq!(gates[0].gate_run_id, gate_run_id);
+        assert_eq!(gates[0].stdout.as_deref(), Some("stdout"));
+        assert_eq!(gates[0].stderr.as_deref(), Some("stderr"));
+        assert!(!gates[0].stdout_truncated);
+        assert!(!gates[0].stderr_truncated);
+    }
+
+    #[test]
+    fn caps_attempt_gate_output_details() {
+        let conn = open(":memory:").unwrap();
+        let run_id = create_run(&conn, &test_contract("test-gate-output-cap")).unwrap();
+        let attempt_id = create_attempt(&conn, run_id).unwrap();
+        record_gate_run(
+            &conn,
+            attempt_id,
+            &crate::gates::result::GateOutput::Execution(
+                crate::gates::result::ExecutionResult::pass(
+                    7,
+                    "tests passed",
+                    0,
+                    15,
+                    vec![b'x'; 8 * 1024 + 1],
+                    vec![b'y'; 8 * 1024 + 1],
+                ),
+            ),
+        )
+        .unwrap();
+
+        let gates = list_attempt_gates(&conn, attempt_id).unwrap().unwrap();
+
+        assert_eq!(gates[0].stdout.as_ref().unwrap().len(), 8 * 1024);
+        assert_eq!(gates[0].stderr.as_ref().unwrap().len(), 8 * 1024);
+        assert!(gates[0].stdout_truncated);
+        assert!(gates[0].stderr_truncated);
+    }
+
+    #[test]
+    fn lists_run_evidence_bundles() {
+        let conn = open(":memory:").unwrap();
+        let run_id = create_run(&conn, &test_contract("test-evidence-list")).unwrap();
+        let attempt_id = create_attempt(&conn, run_id).unwrap();
+        let gate_run_id = record_gate_run(
+            &conn,
+            attempt_id,
+            &crate::gates::result::GateOutput::Simple(crate::gates::result::GateResult::pass(
+                1,
+                "contract valid",
+            )),
+        )
+        .unwrap();
+        create_evidence_bundle(
+            &conn,
+            run_id,
+            Some(attempt_id),
+            Some(gate_run_id),
+            "gate evidence captured",
+        )
+        .unwrap();
+
+        let evidence = list_run_evidence(&conn, run_id).unwrap().unwrap();
+
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].attempt_id, Some(attempt_id));
+        assert_eq!(evidence[0].gate_run_id, Some(gate_run_id));
+    }
+
+    #[test]
     fn final_decision_is_unique_per_run() {
         let conn = open(":memory:").unwrap();
         let contract = Contract {
@@ -182,6 +301,16 @@ mod tests {
              VALUES (1, 1, 1, 'legacy gate');",
         )
         .unwrap();
+    }
+
+    fn test_contract(id: &str) -> Contract {
+        Contract {
+            id: id.to_string(),
+            repo_url: "x".to_string(),
+            base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            scopes: vec!["src".to_string()],
+            requires_human_review: false,
+        }
     }
 
     fn table_count(conn: &Connection, table_name: &str) -> i64 {

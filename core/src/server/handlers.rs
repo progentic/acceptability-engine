@@ -3,8 +3,9 @@ use super::worker::RunWork;
 use crate::contract::Contract;
 use crate::error::{StoreError, ValidationError};
 use crate::store::{
-    create_queued_run, fetch_run_summary, list_runs, update_run_status, with_connection,
-    RunListItem,
+    create_queued_run, fetch_run_summary, list_attempt_gates, list_run_attempts, list_run_evidence,
+    list_runs, update_run_status, with_connection, AttemptGateDetail, AttemptSummary,
+    EvidenceBundleSummary, RunListItem,
 };
 use axum::{
     extract::{Path as AxumPath, Query, State},
@@ -131,6 +132,10 @@ async fn mark_queued_run_failed(state: &AppState, run_id: i64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::store::{
+        create_attempt, create_evidence_bundle, create_run, open, record_gate_run,
+        shared_connection,
+    };
 
     fn contract_with_id(id: &str) -> Contract {
         Contract {
@@ -157,6 +162,166 @@ mod tests {
 
         assert!(matches!(result, Err(ValidationError::WorkspaceEscapesRoot)));
     }
+
+    #[tokio::test]
+    async fn lists_run_attempts_for_http_clients() {
+        let state = state_with_seeded_run("handler-attempts");
+        let run_id = create_attempt_test_data(&state, "handler-attempts").await;
+
+        let Json(attempts) = list_run_attempts_handler(AxumPath(run_id), State(state))
+            .await
+            .unwrap();
+
+        assert_eq!(attempts.len(), 1);
+        assert_eq!(attempts[0].run_id, run_id);
+        assert_eq!(attempts[0].attempt_number, 1);
+    }
+
+    #[tokio::test]
+    async fn lists_attempt_gates_for_http_clients() {
+        let state = state_with_seeded_run("handler-gates");
+        let run_id = create_attempt_test_data(&state, "handler-gates").await;
+        let attempt_id = latest_attempt_id(&state, run_id).await;
+
+        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id), State(state))
+            .await
+            .unwrap();
+
+        assert_eq!(gates.len(), 1);
+        assert_eq!(gates[0].attempt_id, attempt_id);
+        assert_eq!(gates[0].message, "contract valid");
+    }
+
+    #[tokio::test]
+    async fn lists_run_evidence_for_http_clients() {
+        let state = state_with_seeded_run("handler-evidence");
+        let run_id = create_attempt_test_data(&state, "handler-evidence").await;
+
+        let Json(evidence) = list_run_evidence_handler(AxumPath(run_id), State(state))
+            .await
+            .unwrap();
+
+        assert_eq!(evidence.len(), 1);
+        assert_eq!(evidence[0].summary, "gate evidence captured");
+    }
+
+    #[tokio::test]
+    async fn missing_attempt_gates_return_not_found() {
+        let state = state_with_seeded_run("handler-missing-attempt");
+
+        let error = list_attempt_gates_handler(AxumPath(999), State(state))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn missing_run_attempts_return_not_found() {
+        let state = state_with_seeded_run("handler-missing-run-attempts");
+
+        let error = list_run_attempts_handler(AxumPath(999), State(state))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn missing_run_evidence_returns_not_found() {
+        let state = state_with_seeded_run("handler-missing-run-evidence");
+
+        let error = list_run_evidence_handler(AxumPath(999), State(state))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+    }
+
+    #[tokio::test]
+    async fn existing_parent_without_children_returns_empty_lists() {
+        let state = state_with_seeded_run("handler-empty-children");
+        let empty_run_id = create_empty_run(&state, "handler-empty-run").await;
+        let attempt_id = create_empty_attempt(&state, "handler-empty-attempt").await;
+
+        let Json(attempts) =
+            list_run_attempts_handler(AxumPath(empty_run_id), State(state.clone()))
+                .await
+                .unwrap();
+        let Json(evidence) =
+            list_run_evidence_handler(AxumPath(empty_run_id), State(state.clone()))
+                .await
+                .unwrap();
+        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id), State(state))
+            .await
+            .unwrap();
+
+        assert!(attempts.is_empty());
+        assert!(evidence.is_empty());
+        assert!(gates.is_empty());
+    }
+
+    fn state_with_seeded_run(id: &str) -> AppState {
+        let conn = open(":memory:").unwrap();
+        let db = shared_connection(conn);
+        let (run_queue, _receiver) = super::super::worker::run_queue();
+        AppState {
+            db,
+            run_queue,
+            workspace_root: PathBuf::from("/tmp/acceptability-workspaces").join(id),
+        }
+    }
+
+    async fn create_attempt_test_data(state: &AppState, id: &str) -> i64 {
+        let contract = contract_with_id(id);
+        with_connection(state.db.clone(), move |conn| {
+            let run_id = create_run(conn, &contract)?;
+            let attempt_id = create_attempt(conn, run_id)?;
+            let gate_run_id = record_gate_run(
+                conn,
+                attempt_id,
+                &crate::gates::result::GateOutput::Simple(crate::gates::result::GateResult::pass(
+                    1,
+                    "contract valid",
+                )),
+            )?;
+            create_evidence_bundle(
+                conn,
+                run_id,
+                Some(attempt_id),
+                Some(gate_run_id),
+                "gate evidence captured",
+            )?;
+            Ok(run_id)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn latest_attempt_id(state: &AppState, run_id: i64) -> i64 {
+        with_connection(state.db.clone(), move |conn| {
+            Ok(list_run_attempts(conn, run_id)?.unwrap()[0].attempt_id)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn create_empty_run(state: &AppState, id: &str) -> i64 {
+        let contract = contract_with_id(id);
+        with_connection(state.db.clone(), move |conn| create_run(conn, &contract))
+            .await
+            .unwrap()
+    }
+
+    async fn create_empty_attempt(state: &AppState, id: &str) -> i64 {
+        let contract = contract_with_id(id);
+        with_connection(state.db.clone(), move |conn| {
+            let run_id = create_run(conn, &contract)?;
+            create_attempt(conn, run_id)
+        })
+        .await
+        .unwrap()
+    }
 }
 
 pub async fn get_run_status(
@@ -180,6 +345,51 @@ pub async fn get_run_status(
                 store_error
             ),
         )),
+    }
+}
+
+pub async fn list_run_attempts_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<AttemptSummary>>, (StatusCode, String)> {
+    match with_connection(state.db.clone(), move |conn| {
+        list_run_attempts(conn, run_id)
+    })
+    .await
+    {
+        Ok(Some(attempts)) => Ok(Json(attempts)),
+        Ok(None) => missing_record("Run", run_id),
+        Err(store_error) => store_query_error("Failed to query run attempts", store_error),
+    }
+}
+
+pub async fn list_attempt_gates_handler(
+    AxumPath(attempt_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<AttemptGateDetail>>, (StatusCode, String)> {
+    match with_connection(state.db.clone(), move |conn| {
+        list_attempt_gates(conn, attempt_id)
+    })
+    .await
+    {
+        Ok(Some(gates)) => Ok(Json(gates)),
+        Ok(None) => missing_record("Attempt", attempt_id),
+        Err(store_error) => store_query_error("Failed to query attempt gates", store_error),
+    }
+}
+
+pub async fn list_run_evidence_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<EvidenceBundleSummary>>, (StatusCode, String)> {
+    match with_connection(state.db.clone(), move |conn| {
+        list_run_evidence(conn, run_id)
+    })
+    .await
+    {
+        Ok(Some(evidence)) => Ok(Json(evidence)),
+        Ok(None) => missing_record("Run", run_id),
+        Err(store_error) => store_query_error("Failed to query run evidence", store_error),
     }
 }
 
@@ -209,4 +419,21 @@ fn internal_store_error(context: &'static str) -> impl FnOnce(StoreError) -> (St
             format!("{}: {}", context, store_error),
         )
     }
+}
+
+fn missing_record<T>(record_type: &str, id: i64) -> Result<Json<T>, (StatusCode, String)> {
+    Err((
+        StatusCode::NOT_FOUND,
+        format!("{record_type} record not found for ID '{id}'"),
+    ))
+}
+
+fn store_query_error<T>(
+    context: &'static str,
+    store_error: StoreError,
+) -> Result<Json<T>, (StatusCode, String)> {
+    Err((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        format!("{context}: {store_error}"),
+    ))
 }

@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.12] - 2026-06-03 - Evidence Read API
+
+### Added
+- **Run Attempts Endpoint** - Added `GET /runs/:id/attempts` for listing durable attempts for a run
+- **Attempt Gates Endpoint** - Added `GET /attempts/:id/gates` for reading detailed gate records, command output, and test metrics for an attempt
+- **Run Evidence Endpoint** - Added `GET /runs/:id/evidence` for reading evidence bundle anchors linked to runs, attempts, and gate records
+- **Evidence Read DTOs** - Added JSON response models for attempt summaries, attempt gate details, and evidence bundle summaries
+- **Evidence Read Coverage** - Added store and HTTP handler coverage for attempt, gate, evidence, and missing-attempt read behavior
+
+### Changed
+- **Store Read Layout** - Split attempt and evidence read queries into focused modules so the HTTP layer remains a thin coordination boundary
+- **Gate Output Preview** - Capped gate detail stdout/stderr previews at 8 KiB and added truncation flags for oversized command output
+
 ## [0.0.11] - 2026-06-03 - Attempt Evidence Model
 
 ### Added
