@@ -2,30 +2,35 @@ use crate::error::git::GitError;
 use crate::error::GateError;
 use crate::gates::result::GateResult;
 use crate::orchestrator::state_machine::Run;
-use std::process::{Command, Output};
 use std::path::Path;
+use std::process::{Command, Output};
 
 pub async fn run(run: &Run) -> Result<GateResult, GateError> {
     let workspace_path = run.workspace.clone();
     let base_sha = run.contract.base_sha.clone();
     let allowed_scopes = run.contract.scopes.clone();
 
-    let changed_files = tokio::task::spawn_blocking(move || {
-        execute_git_diff(&workspace_path, &base_sha)
-    })
-    .await
-    .map_err(|source| GateError::ExecutorJoinFailed { source })??;
+    let changed_files =
+        tokio::task::spawn_blocking(move || execute_git_diff(&workspace_path, &base_sha))
+            .await
+            .map_err(|source| GateError::ExecutorJoinFailed { source })??;
 
     for file in changed_files {
         if !is_file_allowed(&file, &allowed_scopes) {
             return Ok(GateResult::fail(
                 3,
-                format!("Change boundary violation: file '{}' outside contract scopes", file),
+                format!(
+                    "Change boundary violation: file '{}' outside contract scopes",
+                    file
+                ),
             ));
         }
     }
 
-    Ok(GateResult::pass(3, "All changed files fall within contract scopes"))
+    Ok(GateResult::pass(
+        3,
+        "All changed files fall within contract scopes",
+    ))
 }
 
 fn execute_git_diff(repo_path: &Path, base_sha: &str) -> Result<Vec<String>, GitError> {
@@ -54,7 +59,7 @@ fn parse_git_diff_output(output: &Output) -> Result<Vec<String>, GitError> {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut files = Vec::new();
-    
+
     for line in stdout.lines() {
         let trimmed = line.trim();
         if !trimmed.is_empty() {
@@ -84,11 +89,11 @@ mod tests {
     #[test]
     fn test_scope_boundary() {
         let scopes = vec!["src/api".to_string(), "src/core/".to_string()];
-        
+
         assert!(is_file_allowed("src/api/file.rs", &scopes));
         assert!(is_file_allowed("src/api", &scopes));
         assert!(is_file_allowed("src/core/mod.rs", &scopes));
-        
+
         assert!(!is_file_allowed("src/api_backup/file.rs", &scopes));
         assert!(!is_file_allowed("src/core_engine/mod.rs", &scopes));
     }

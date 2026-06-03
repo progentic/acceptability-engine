@@ -1,9 +1,9 @@
-pub use rusqlite::Connection;
+use crate::contract::Contract;
 use crate::error::StoreError;
 use crate::gates::result::GateOutput;
-use crate::contract::Contract;
-use std::time::{SystemTime, UNIX_EPOCH};
+pub use rusqlite::Connection;
 use serde::Serialize;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Serialize, Clone, Debug)]
 pub struct RunStatusSummary {
@@ -34,8 +34,8 @@ pub struct RunListItem {
 // CONCURRENCY: Connection wrapped in Mutex. Long-running contracts hold lock
 // for duration. Layer 8 will migrate to sqlx::SqlitePool for concurrent reads.
 pub fn open(database_url: &str) -> Result<Connection, StoreError> {
-    let conn = Connection::open(database_url)
-        .map_err(|source| StoreError::ConnectionFailed { source })?;
+    let conn =
+        Connection::open(database_url).map_err(|source| StoreError::ConnectionFailed { source })?;
     init_schema(&conn)?;
     Ok(conn)
 }
@@ -72,7 +72,10 @@ pub fn update_run_status(conn: &Connection, run_id: i64, status: &str) -> Result
     Ok(())
 }
 
-pub fn fetch_run_summary(conn: &Connection, run_id: i64) -> Result<Option<RunStatusSummary>, StoreError> {
+pub fn fetch_run_summary(
+    conn: &Connection,
+    run_id: i64,
+) -> Result<Option<RunStatusSummary>, StoreError> {
     let mut run_statement = conn
         .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE id = ?1")
         .map_err(|source| StoreError::QueryFailed { source })?;
@@ -81,15 +84,26 @@ pub fn fetch_run_summary(conn: &Connection, run_id: i64) -> Result<Option<RunSta
         .query(rusqlite::params![run_id])
         .map_err(|source| StoreError::QueryFailed { source })?;
 
-    let Some(row) = run_rows.next().map_err(|source| StoreError::QueryFailed { source })? else {
+    let Some(row) = run_rows
+        .next()
+        .map_err(|source| StoreError::QueryFailed { source })?
+    else {
         return Ok(None);
     };
 
     let mut summary = RunStatusSummary {
-        run_id: row.get(0).map_err(|source| StoreError::QueryFailed { source })?,
-        contract_id: row.get(1).map_err(|source| StoreError::QueryFailed { source })?,
-        status: row.get(2).map_err(|source| StoreError::QueryFailed { source })?,
-        created_at: row.get(3).map_err(|source| StoreError::QueryFailed { source })?,
+        run_id: row
+            .get(0)
+            .map_err(|source| StoreError::QueryFailed { source })?,
+        contract_id: row
+            .get(1)
+            .map_err(|source| StoreError::QueryFailed { source })?,
+        status: row
+            .get(2)
+            .map_err(|source| StoreError::QueryFailed { source })?,
+        created_at: row
+            .get(3)
+            .map_err(|source| StoreError::QueryFailed { source })?,
         gates: Vec::new(),
     };
 
@@ -101,14 +115,27 @@ pub fn fetch_run_summary(conn: &Connection, run_id: i64) -> Result<Option<RunSta
         .query(rusqlite::params![run_id])
         .map_err(|source| StoreError::QueryFailed { source })?;
 
-    while let Some(gate_row) = gate_rows.next().map_err(|source| StoreError::QueryFailed { source })? {
-        let passed_int: i32 = gate_row.get(1).map_err(|source| StoreError::QueryFailed { source })?;
+    while let Some(gate_row) = gate_rows
+        .next()
+        .map_err(|source| StoreError::QueryFailed { source })?
+    {
+        let passed_int: i32 = gate_row
+            .get(1)
+            .map_err(|source| StoreError::QueryFailed { source })?;
         summary.gates.push(GateRunSummary {
-            gate_num: gate_row.get(0).map_err(|source| StoreError::QueryFailed { source })?,
+            gate_num: gate_row
+                .get(0)
+                .map_err(|source| StoreError::QueryFailed { source })?,
             passed: passed_int != 0,
-            message: gate_row.get(2).map_err(|source| StoreError::QueryFailed { source })?,
-            exit_code: gate_row.get(3).map_err(|source| StoreError::QueryFailed { source })?,
-            duration_ms: gate_row.get(4).map_err(|source| StoreError::QueryFailed { source })?,
+            message: gate_row
+                .get(2)
+                .map_err(|source| StoreError::QueryFailed { source })?,
+            exit_code: gate_row
+                .get(3)
+                .map_err(|source| StoreError::QueryFailed { source })?,
+            duration_ms: gate_row
+                .get(4)
+                .map_err(|source| StoreError::QueryFailed { source })?,
         });
     }
 
@@ -136,12 +163,23 @@ pub fn list_runs(
         let mut rows = stmt
             .query(rusqlite::params![status, limit, offset])
             .map_err(|source| StoreError::QueryFailed { source })?;
-        while let Some(row) = rows.next().map_err(|source| StoreError::QueryFailed { source })? {
+        while let Some(row) = rows
+            .next()
+            .map_err(|source| StoreError::QueryFailed { source })?
+        {
             results.push(RunListItem {
-                run_id: row.get(0).map_err(|source| StoreError::QueryFailed { source })?,
-                contract_id: row.get(1).map_err(|source| StoreError::QueryFailed { source })?,
-                status: row.get(2).map_err(|source| StoreError::QueryFailed { source })?,
-                created_at: row.get(3).map_err(|source| StoreError::QueryFailed { source })?,
+                run_id: row
+                    .get(0)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                contract_id: row
+                    .get(1)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                status: row
+                    .get(2)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                created_at: row
+                    .get(3)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
             });
         }
     } else {
@@ -151,12 +189,23 @@ pub fn list_runs(
         let mut rows = stmt
             .query(rusqlite::params![limit, offset])
             .map_err(|source| StoreError::QueryFailed { source })?;
-        while let Some(row) = rows.next().map_err(|source| StoreError::QueryFailed { source })? {
+        while let Some(row) = rows
+            .next()
+            .map_err(|source| StoreError::QueryFailed { source })?
+        {
             results.push(RunListItem {
-                run_id: row.get(0).map_err(|source| StoreError::QueryFailed { source })?,
-                contract_id: row.get(1).map_err(|source| StoreError::QueryFailed { source })?,
-                status: row.get(2).map_err(|source| StoreError::QueryFailed { source })?,
-                created_at: row.get(3).map_err(|source| StoreError::QueryFailed { source })?,
+                run_id: row
+                    .get(0)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                contract_id: row
+                    .get(1)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                status: row
+                    .get(2)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
+                created_at: row
+                    .get(3)
+                    .map_err(|source| StoreError::QueryFailed { source })?,
             });
         }
     }
@@ -166,9 +215,24 @@ pub fn list_runs(
 
 // PERFORMANCE: stdout/stderr cloned into DB. Limit gate timeouts to keep
 // artifacts <10MB. Gate 8 will add LFS pointers for large logs.
-pub fn record_gate_run(conn: &Connection, run_id: i64, output: &GateOutput) -> Result<(), StoreError> {
-    let (gate_num, passed, message, exit_code, duration_ms, stdout, stderr,
-         test_passed, test_failed, test_ignored, parse_errors) = match output {
+pub fn record_gate_run(
+    conn: &Connection,
+    run_id: i64,
+    output: &GateOutput,
+) -> Result<(), StoreError> {
+    let (
+        gate_num,
+        passed,
+        message,
+        exit_code,
+        duration_ms,
+        stdout,
+        stderr,
+        test_passed,
+        test_failed,
+        test_ignored,
+        parse_errors,
+    ) = match output {
         GateOutput::Simple(result) => (
             result.gate_num,
             result.passed,

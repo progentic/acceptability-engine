@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.1] - 2026-06-03 - Compile Baseline Stabilization
+
+### Added
+- **Cargo Lockfile** - Generated `core/Cargo.lock` for reproducible binary crate builds
+- **Nested Target Ignore** - Added `**/target/` ignore coverage so `core/target/` build artifacts stay out of git status
+
+### Changed
+- **Orchestrator Storage Boundary** - Updated `run_contract` to accept shared database state and lock SQLite only around create, record, and status update operations
+- **HTTP Submit Handler** - Removed the long-held database guard across awaited gate execution, allowing the Axum handler future to satisfy framework requirements
+- **CLI Execution Path** - Wrapped the single-shot SQLite connection in shared state so CLI and HTTP continue to invoke the same orchestrator entrypoint
+
+### Updated
+- **Blocking Gate Closures** - Added explicit result types for Gate 2 workspace setup and Gate 7 test execution closures
+- **Process Error Construction** - Replaced `std::io::Error::new(ErrorKind::Other, ...)` with `std::io::Error::other(...)`
+- **Source Formatting** - Applied `cargo fmt` across the core crate
+
+### Removed
+- **Unused Future Placeholders** - Removed currently-unused error variants and run context fields that prevented `cargo clippy -- -D warnings` from passing
+
+### Fixed
+- **Build Failure** - Fixed the private `StoreError` import in the HTTP handlers module
+- **Compile Baseline** - Restored successful `cargo test`, `cargo clippy -- -D warnings`, and `cargo fmt -- --check`
+
 ## [0.0.0] - 2026-06-02 - Blank Bootstrap Build
 
 ### Added

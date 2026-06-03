@@ -1,9 +1,14 @@
+use super::state::AppState;
 use crate::contract::Contract;
+use crate::error::StoreError;
 use crate::orchestrator::run_contract;
 use crate::orchestrator::state_machine::FinalDecision;
-use crate::store::{fetch_run_summary, list_runs, RunListItem, StoreError};
-use super::state::AppState;
-use axum::{extract::{Path, Query, State}, http::StatusCode, Json};
+use crate::store::{fetch_run_summary, list_runs, RunListItem};
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    Json,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize)]
@@ -39,9 +44,7 @@ pub async fn submit_contract(
     let mut runtime_workspace = state.workspace_root.clone();
     runtime_workspace.push(&contract.id);
 
-    let database_guard = state.db.lock().await;
-
-    match run_contract(&database_guard, contract, runtime_workspace).await {
+    match run_contract(state.db.clone(), contract, runtime_workspace).await {
         Ok(FinalDecision::Approve) => Ok(Json(SubmitResponse {
             status: "APPROVED".to_string(),
             reason: None,
@@ -52,7 +55,10 @@ pub async fn submit_contract(
         })),
         Err(orchestration_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Internal engine pipeline execution failure: {}", orchestration_error),
+            format!(
+                "Internal engine pipeline execution failure: {}",
+                orchestration_error
+            ),
         )),
     }
 }
@@ -71,7 +77,10 @@ pub async fn get_run_status(
         )),
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to retrieve execution record from datastore: {}", store_error),
+            format!(
+                "Failed to retrieve execution record from datastore: {}",
+                store_error
+            ),
         )),
     }
 }
@@ -89,9 +98,7 @@ pub async fn list_runs_handler(
         query.offset,
     ) {
         Ok(items) => Ok(Json(items)),
-        Err(StoreError::InvalidParameter(msg)) => {
-            Err((StatusCode::BAD_REQUEST, msg))
-        }
+        Err(StoreError::InvalidParameter(msg)) => Err((StatusCode::BAD_REQUEST, msg)),
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to query run list: {}", store_error),

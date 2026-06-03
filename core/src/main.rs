@@ -2,8 +2,8 @@ mod contract;
 mod error;
 mod gates;
 mod orchestrator;
-mod store;
 mod server;
+mod store;
 
 use clap::Parser;
 use contract::Contract;
@@ -55,7 +55,10 @@ async fn main() {
         };
 
         if let Err(server_error) = server::run_server(server_state, listening_port).await {
-            eprintln!("PANIC: Network runtime engine bound crash: {}", server_error);
+            eprintln!(
+                "PANIC: Network runtime engine bound crash: {}",
+                server_error
+            );
             std::process::exit(3);
         }
         return;
@@ -77,15 +80,22 @@ async fn main() {
         }
     };
 
-    println!("Orchestrator driving contract validation sequence for: {}", contract_payload.id);
+    println!(
+        "Orchestrator driving contract validation sequence for: {}",
+        contract_payload.id
+    );
 
-    match orchestrator::run_contract(&raw_connection, contract_payload, args.workspace).await {
+    let shared_db = Arc::new(Mutex::new(raw_connection));
+    match orchestrator::run_contract(shared_db, contract_payload, args.workspace).await {
         Ok(FinalDecision::Approve) => {
             println!("SUCCESS: Contract evaluation approved.");
             std::process::exit(0);
         }
         Ok(FinalDecision::Reject { reason }) => {
-            println!("REJECTED: Contract validation failed checks. Reason: {}", reason);
+            println!(
+                "REJECTED: Contract validation failed checks. Reason: {}",
+                reason
+            );
             std::process::exit(2);
         }
         Err(error) => {
@@ -96,12 +106,11 @@ async fn main() {
 }
 
 fn read_contract(path: &Path) -> Result<Contract, ContractLoadError> {
-    let file_contents = std::fs::read_to_string(path).map_err(|source| {
-        ContractLoadError::ReadFailed {
+    let file_contents =
+        std::fs::read_to_string(path).map_err(|source| ContractLoadError::ReadFailed {
             path: path.to_string_lossy().into_owned(),
             source,
-        }
-    })?;
+        })?;
 
     let contract = serde_json::from_str(&file_contents)
         .map_err(|source| ContractLoadError::ParseFailed { source })?;

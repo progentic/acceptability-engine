@@ -45,7 +45,7 @@ pub async fn run(run: &Run) -> Result<ExecutionResult, GateError> {
             );
         }
 
-        Ok(exec_result)
+        Ok::<ExecutionResult, crate::error::ProcessError>(exec_result)
     })
     .await
     .map_err(|source| GateError::ExecutorJoinFailed { source })??;
