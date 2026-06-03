@@ -1,3 +1,4 @@
+use super::artifacts::StoredArtifactDescriptor;
 use super::clock::current_unix_seconds;
 use super::types::{AttemptId, EvidenceBundleId, GateRunId, RunId};
 use crate::error::StoreError;
@@ -36,6 +37,30 @@ pub fn create_evidence_bundle(
             byte_len: None,
             content_type: None,
             summary,
+        },
+    )
+}
+
+pub fn create_artifact_evidence_bundle(
+    conn: &Connection,
+    run_id: RunId,
+    attempt_id: Option<AttemptId>,
+    gate_run_id: Option<GateRunId>,
+    artifact: &StoredArtifactDescriptor,
+) -> Result<EvidenceBundleId, StoreError> {
+    create_evidence_bundle_record(
+        conn,
+        EvidenceDescriptor {
+            run_id,
+            attempt_id,
+            gate_run_id,
+            kind: &artifact.kind,
+            label: &artifact.label,
+            storage_uri: Some(&artifact.storage_uri),
+            sha256: Some(&artifact.sha256),
+            byte_len: Some(artifact.byte_len),
+            content_type: Some(&artifact.content_type),
+            summary: &artifact.summary,
         },
     )
 }

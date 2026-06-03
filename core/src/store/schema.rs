@@ -1,6 +1,11 @@
 use crate::error::StoreError;
 use rusqlite::Connection;
 
+const CORE_TABLES_SQL: &str = include_str!("../../migrations/0001_core_tables.sql");
+const GATE_RUNS_SQL: &str = include_str!("../../migrations/0002_gate_runs.sql");
+const EVIDENCE_BUNDLES_SQL: &str = include_str!("../../migrations/0003_evidence_bundles.sql");
+const QUERY_INDEXES_SQL: &str = include_str!("../../migrations/0004_query_indexes.sql");
+
 pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     create_core_tables(conn)?;
     normalize_attempts_table(conn)?;
@@ -11,45 +16,7 @@ pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
 }
 
 fn create_core_tables(conn: &Connection) -> Result<(), StoreError> {
-    conn.execute_batch(
-        "PRAGMA foreign_keys = ON;
-         
-         CREATE TABLE IF NOT EXISTS contracts (
-             id TEXT PRIMARY KEY,
-             repo_url TEXT NOT NULL,
-             base_sha TEXT NOT NULL,
-             requires_human_review INTEGER NOT NULL
-         );
-
-         CREATE TABLE IF NOT EXISTS runs (
-             id INTEGER PRIMARY KEY AUTOINCREMENT,
-             contract_id TEXT NOT NULL,
-             status TEXT NOT NULL,
-             created_at INTEGER NOT NULL,
-             FOREIGN KEY(contract_id) REFERENCES contracts(id)
-         );
-
-         CREATE TABLE IF NOT EXISTS attempts (
-             id INTEGER PRIMARY KEY AUTOINCREMENT,
-             run_id INTEGER NOT NULL,
-             attempt_number INTEGER NOT NULL,
-             status TEXT NOT NULL,
-             created_at INTEGER NOT NULL,
-             FOREIGN KEY(run_id) REFERENCES runs(id),
-             UNIQUE(run_id, attempt_number)
-         );
-
-         CREATE TABLE IF NOT EXISTS final_decisions (
-             id INTEGER PRIMARY KEY AUTOINCREMENT,
-             run_id INTEGER NOT NULL UNIQUE,
-             decision TEXT NOT NULL,
-             reason TEXT,
-             created_at INTEGER NOT NULL,
-             FOREIGN KEY(run_id) REFERENCES runs(id)
-         );",
-    )
-    .map_err(|source| StoreError::MigrationFailed { source })?;
-    Ok(())
+    execute_migration(conn, CORE_TABLES_SQL)
 }
 
 fn normalize_attempts_table(conn: &Connection) -> Result<(), StoreError> {
@@ -163,26 +130,7 @@ fn migrate_legacy_gate_runs(conn: &Connection) -> Result<(), StoreError> {
 }
 
 fn create_attempt_gate_runs_table(conn: &Connection) -> Result<(), StoreError> {
-    conn.execute_batch(
-        "CREATE TABLE gate_runs (
-             id INTEGER PRIMARY KEY AUTOINCREMENT,
-             attempt_id INTEGER NOT NULL,
-             gate_num INTEGER NOT NULL,
-             passed INTEGER NOT NULL,
-             message TEXT NOT NULL,
-             exit_code INTEGER,
-             duration_ms INTEGER,
-             stdout BLOB,
-             stderr BLOB,
-             test_passed INTEGER,
-             test_failed INTEGER,
-             test_ignored INTEGER,
-             parse_errors INTEGER,
-             FOREIGN KEY(attempt_id) REFERENCES attempts(id)
-         );",
-    )
-    .map_err(|source| StoreError::MigrationFailed { source })?;
-    Ok(())
+    execute_migration(conn, GATE_RUNS_SQL)
 }
 
 fn normalize_evidence_bundles_table(conn: &Connection) -> Result<(), StoreError> {
@@ -201,27 +149,7 @@ fn has_current_evidence_link_columns(conn: &Connection) -> Result<bool, StoreErr
 }
 
 fn create_evidence_bundles_table(conn: &Connection) -> Result<(), StoreError> {
-    conn.execute_batch(
-        "CREATE TABLE evidence_bundles (
-             id INTEGER PRIMARY KEY AUTOINCREMENT,
-             run_id INTEGER NOT NULL,
-             attempt_id INTEGER,
-             gate_run_id INTEGER,
-             kind TEXT NOT NULL DEFAULT 'summary',
-             label TEXT NOT NULL DEFAULT 'Evidence summary',
-             storage_uri TEXT,
-             sha256 TEXT,
-             byte_len INTEGER,
-             content_type TEXT,
-             summary TEXT NOT NULL,
-             created_at INTEGER NOT NULL,
-             FOREIGN KEY(run_id) REFERENCES runs(id),
-             FOREIGN KEY(attempt_id) REFERENCES attempts(id),
-             FOREIGN KEY(gate_run_id) REFERENCES gate_runs(id)
-         );",
-    )
-    .map_err(|source| StoreError::MigrationFailed { source })?;
-    Ok(())
+    execute_migration(conn, EVIDENCE_BUNDLES_SQL)
 }
 
 fn rebuild_evidence_bundles(conn: &Connection) -> Result<(), StoreError> {
@@ -287,23 +215,12 @@ fn add_missing_evidence_descriptor_columns(conn: &Connection) -> Result<(), Stor
 }
 
 fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {
-    conn.execute_batch(
-        "CREATE INDEX IF NOT EXISTS idx_runs_status_created_at
-             ON runs(status, created_at);
-         CREATE INDEX IF NOT EXISTS idx_runs_contract_id
-             ON runs(contract_id);
-         CREATE INDEX IF NOT EXISTS idx_attempts_run_number
-             ON attempts(run_id, attempt_number);
-         CREATE INDEX IF NOT EXISTS idx_gate_runs_attempt_gate
-             ON gate_runs(attempt_id, gate_num);
-         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_run_created_at
-             ON evidence_bundles(run_id, created_at);
-         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_attempt
-             ON evidence_bundles(attempt_id);
-         CREATE INDEX IF NOT EXISTS idx_evidence_bundles_gate_run
-             ON evidence_bundles(gate_run_id);",
-    )
-    .map_err(|source| StoreError::MigrationFailed { source })?;
+    execute_migration(conn, QUERY_INDEXES_SQL)
+}
+
+fn execute_migration(conn: &Connection, sql: &str) -> Result<(), StoreError> {
+    conn.execute_batch(sql)
+        .map_err(|source| StoreError::MigrationFailed { source })?;
     Ok(())
 }
 

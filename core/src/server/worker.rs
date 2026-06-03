@@ -1,6 +1,6 @@
 use crate::contract::Contract;
 use crate::orchestrator::{execute_existing_run, state_machine::FinalDecision};
-use crate::store::{update_run_status, with_connection, RunId, SharedConnection};
+use crate::store::{update_run_status, with_connection, ArtifactStore, RunId, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -35,22 +35,37 @@ pub fn run_queue() -> (RunQueueSender, RunQueueReceiver) {
     mpsc::channel(RUN_QUEUE_CAPACITY)
 }
 
-pub fn spawn_run_worker(db: SharedConnection, receiver: RunQueueReceiver) -> RunWorker {
+pub fn spawn_run_worker(
+    db: SharedConnection,
+    artifact_store: ArtifactStore,
+    receiver: RunQueueReceiver,
+) -> RunWorker {
     let handle = tokio::spawn(async move {
-        process_run_queue(db, receiver).await;
+        process_run_queue(db, artifact_store, receiver).await;
     });
     RunWorker { handle }
 }
 
-async fn process_run_queue(db: SharedConnection, mut receiver: RunQueueReceiver) {
+async fn process_run_queue(
+    db: SharedConnection,
+    artifact_store: ArtifactStore,
+    mut receiver: RunQueueReceiver,
+) {
     while let Some(work) = receiver.recv().await {
-        process_run_work(db.clone(), work).await;
+        process_run_work(db.clone(), artifact_store.clone(), work).await;
     }
 }
 
-async fn process_run_work(db: SharedConnection, work: RunWork) {
+async fn process_run_work(db: SharedConnection, artifact_store: ArtifactStore, work: RunWork) {
     let run_id = work.run_id;
-    let result = execute_existing_run(db.clone(), work.run_id, work.contract, work.workspace).await;
+    let result = execute_existing_run(
+        db.clone(),
+        artifact_store,
+        work.run_id,
+        work.contract,
+        work.workspace,
+    )
+    .await;
     if should_mark_internal_failure(&result) {
         mark_run_failed_internal(&db, run_id).await;
     }

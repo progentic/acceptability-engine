@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.16] - 2026-06-03 - Production Evidence Store
+
+### Added
+- **Bounded SQLite Connection Pool** - Added a production store connection boundary that opens per-operation SQLite connections behind an async semaphore instead of serializing all HTTP and worker access through one mutex
+- **External Migration Files** - Moved core table, gate run, evidence bundle, and query index SQL into versioned files under `core/migrations`
+- **Filesystem Artifact Store** - Added a filesystem-backed artifact writer that returns storage URI, SHA-256, byte length, content type, kind, label, and summary descriptors
+- **Gate Artifact Evidence** - Gate finalization now writes JSON telemetry artifacts and stores descriptor-backed evidence bundle rows linked to the run, attempt, and gate record
+- **Evidence Store Coverage** - Added tests for pooled file-backed database reuse, filesystem artifact descriptors, and artifact-backed gate evidence metadata
+
+### Changed
+- **CLI Artifact Configuration** - Added `--artifact-root` so CLI and HTTP execution can write durable evidence artifacts outside SQLite
+- **HTTP Worker Dependencies** - Threaded artifact storage through the supervised run worker so background runs capture artifact descriptors during finalization
+- **Schema Ownership** - Kept legacy shape normalization in Rust while making the durable schema SQL inspectable as migration files
+- **Store Concurrency Boundary** - Preserved the focused store query modules while removing the production `Arc<Mutex<Connection>>` bottleneck from the main runtime path
+
 ## [0.0.15] - 2026-06-03 - Evidence Store Descriptors
 
 ### Added

@@ -1,3 +1,4 @@
+mod artifacts;
 mod attempt_reads;
 mod clock;
 mod connection;
@@ -12,9 +13,12 @@ mod schema;
 mod transaction;
 mod types;
 
+pub use artifacts::{ArtifactInput, ArtifactStore};
 pub use attempt_reads::{list_attempt_gates, list_run_attempts};
-pub use connection::{open, shared_connection, with_connection, SharedConnection};
-pub use evidence::create_evidence_bundle;
+#[cfg(test)]
+pub use connection::{open, shared_connection};
+pub use connection::{pooled_connection, with_connection, SharedConnection};
+pub use evidence::{create_artifact_evidence_bundle, create_evidence_bundle};
 pub use evidence_reads::list_run_evidence;
 pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
@@ -25,8 +29,8 @@ pub use runs::{
 pub use rusqlite::Connection;
 pub use transaction::with_transaction;
 pub use types::{
-    AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleSummary, RunId, RunListItem,
-    RunStatusSummary,
+    AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleSummary, GateRunId, RunId,
+    RunListItem, RunStatusSummary,
 };
 
 #[cfg(test)]
@@ -313,6 +317,30 @@ mod tests {
         assert!(matches!(duplicate, Err(StoreError::InsertFailed { .. })));
     }
 
+    #[tokio::test]
+    async fn pooled_connection_reuses_file_backed_store() {
+        let db = pooled_connection(&test_database_path("pooled-connection")).unwrap();
+        let contract = test_contract("test-pooled-connection");
+
+        let run_id = with_connection(db.clone(), move |conn| create_run(conn, &contract))
+            .await
+            .unwrap();
+        let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
+            .await
+            .unwrap()
+            .unwrap();
+
+        assert_eq!(summary.run_id, run_id);
+        assert_eq!(summary.status, "RUNNING");
+    }
+
+    #[test]
+    fn pooled_connection_rejects_memory_database() {
+        let result = pooled_connection(":memory:");
+
+        assert!(matches!(result, Err(StoreError::InvalidParameter(_))));
+    }
+
     fn create_legacy_schema(conn: &Connection) {
         conn.execute_batch(
             "CREATE TABLE contracts (
@@ -362,6 +390,24 @@ mod tests {
             scopes: vec!["src".to_string()],
             requires_human_review: false,
         }
+    }
+
+    fn test_database_path(name: &str) -> String {
+        let directory = std::env::temp_dir()
+            .join("acceptability-engine-db-tests")
+            .join(test_unique_suffix());
+        std::fs::create_dir_all(&directory).unwrap();
+        directory
+            .join(format!("{name}.db"))
+            .to_string_lossy()
+            .into_owned()
+    }
+
+    fn test_unique_suffix() -> String {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        now.as_nanos().to_string()
     }
 
     fn table_count(conn: &Connection, table_name: &str) -> i64 {

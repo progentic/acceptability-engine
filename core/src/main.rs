@@ -28,6 +28,10 @@ struct Args {
     #[arg(short, long, default_value = "evidence.db")]
     database: String,
 
+    /// Path to filesystem evidence artifact root
+    #[arg(long, default_value = "artifacts")]
+    artifact_root: PathBuf,
+
     /// Bind and run as an HTTP web service on specified network port
     #[arg(short, long)]
     port: Option<u16>,
@@ -44,7 +48,7 @@ async fn main() {
         }
     };
 
-    let raw_connection = match store::open(&args.database) {
+    let shared_db = match store::pooled_connection(&args.database) {
         Ok(connection) => connection,
         Err(error) => {
             eprintln!("PANIC: Database initialization failed: {}", error);
@@ -53,9 +57,14 @@ async fn main() {
     };
 
     if let Some(listening_port) = args.port {
-        let shared_db = store::shared_connection(raw_connection);
-        if let Err(server_error) =
-            server::run_server(shared_db, args.workspace, workspace_mode, listening_port).await
+        if let Err(server_error) = server::run_server(
+            shared_db,
+            args.workspace,
+            args.artifact_root,
+            workspace_mode,
+            listening_port,
+        )
+        .await
         {
             eprintln!(
                 "PANIC: Network runtime engine bound crash: {}",
@@ -88,8 +97,10 @@ async fn main() {
         workspace_mode.as_str()
     );
 
-    let shared_db = store::shared_connection(raw_connection);
-    match orchestrator::run_contract(shared_db, contract_payload, args.workspace).await {
+    let artifact_store = store::ArtifactStore::new(args.artifact_root);
+    match orchestrator::run_contract(shared_db, artifact_store, contract_payload, args.workspace)
+        .await
+    {
         Ok(FinalDecision::Approve) => {
             println!("SUCCESS: Contract evaluation approved.");
             std::process::exit(0);

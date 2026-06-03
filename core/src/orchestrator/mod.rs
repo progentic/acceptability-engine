@@ -1,3 +1,4 @@
+mod evidence_artifacts;
 pub mod state_machine;
 
 use crate::contract::Contract;
@@ -6,23 +7,26 @@ use crate::gates::result::GateOutput;
 use crate::gates::runner::run_gates_sequential;
 use crate::store::{
     create_attempt, create_evidence_bundle, create_run, record_final_decision, record_gate_run,
-    update_attempt_status, update_run_status, with_connection, with_transaction, AttemptId, RunId,
-    SharedConnection,
+    update_attempt_status, update_run_status, with_connection, with_transaction, ArtifactStore,
+    AttemptId, RunId, SharedConnection,
 };
+use evidence_artifacts::record_gate_artifact;
 use state_machine::{FinalDecision, Run};
 use std::path::PathBuf;
 
 pub async fn run_contract(
     db: SharedConnection,
+    artifact_store: ArtifactStore,
     contract: Contract,
     workspace: PathBuf,
 ) -> Result<FinalDecision, OrchestratorError> {
     let run_id = create_run_record(&db, &contract).await?;
-    execute_existing_run(db, run_id, contract, workspace).await
+    execute_existing_run(db, artifact_store, run_id, contract, workspace).await
 }
 
 pub async fn execute_existing_run(
     db: SharedConnection,
+    artifact_store: ArtifactStore,
     run_id: RunId,
     contract: Contract,
     workspace: PathBuf,
@@ -40,7 +44,15 @@ pub async fn execute_existing_run(
     };
     let final_decision = decide_from_gate_outputs(&gate_outputs, requires_human_review);
 
-    finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision).await?;
+    finalize_run_record(
+        &db,
+        &artifact_store,
+        run_id,
+        attempt_id,
+        &gate_outputs,
+        &final_decision,
+    )
+    .await?;
 
     Ok(final_decision)
 }
@@ -118,6 +130,7 @@ fn decide_from_gate_outputs(
 
 async fn finalize_run_record(
     db: &SharedConnection,
+    artifact_store: &ArtifactStore,
     run_id: RunId,
     attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
@@ -127,9 +140,16 @@ async fn finalize_run_record(
     let status = final_status(final_decision);
     let attempt_status = final_attempt_status(final_decision);
     let final_decision_record = persisted_final_decision(final_decision);
+    let artifact_store = artifact_store.clone();
     Ok(with_connection(db.clone(), move |conn| {
         with_transaction(conn, |transaction| {
-            record_gate_outputs(transaction, run_id, attempt_id, &gate_outputs)?;
+            record_gate_outputs(
+                transaction,
+                &artifact_store,
+                run_id,
+                attempt_id,
+                &gate_outputs,
+            )?;
             update_attempt_status(transaction, attempt_id, attempt_status)?;
             update_run_status(transaction, run_id, status)?;
             record_persisted_final_decision(transaction, run_id, final_decision_record)
@@ -177,18 +197,20 @@ fn record_persisted_final_decision(
 
 fn record_gate_outputs(
     conn: &crate::store::Connection,
+    artifact_store: &ArtifactStore,
     run_id: RunId,
     attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
 ) -> Result<(), crate::error::StoreError> {
     for output in gate_outputs {
         let gate_run_id = record_gate_run(conn, attempt_id, output)?;
-        create_evidence_bundle(
+        record_gate_artifact(
             conn,
+            artifact_store,
             run_id,
-            Some(attempt_id),
-            Some(gate_run_id),
-            "gate telemetry captured",
+            attempt_id,
+            gate_run_id,
+            output,
         )?;
     }
     Ok(())
@@ -198,7 +220,9 @@ fn record_gate_outputs(
 mod tests {
     use super::*;
     use crate::gates::result::{GateOutput, GateResult};
-    use crate::store::{create_queued_run, fetch_run_summary, open, shared_connection};
+    use crate::store::{
+        create_queued_run, fetch_run_summary, list_run_evidence, open, shared_connection,
+    };
     use std::path::PathBuf;
 
     fn valid_contract() -> Contract {
@@ -258,6 +282,7 @@ mod tests {
     #[tokio::test]
     async fn records_gate_outputs_and_final_status_together() {
         let db = shared_connection(open(":memory:").unwrap());
+        let artifacts = test_artifacts("records-final-status");
         let contract = valid_contract();
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
@@ -267,9 +292,16 @@ mod tests {
         ))];
         let final_decision = decide_from_gate_outputs(&gate_outputs, false);
 
-        finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision)
-            .await
-            .unwrap();
+        finalize_run_record(
+            &db,
+            &artifacts,
+            run_id,
+            attempt_id,
+            &gate_outputs,
+            &final_decision,
+        )
+        .await
+        .unwrap();
 
         let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
             .await
@@ -280,11 +312,16 @@ mod tests {
         assert_eq!(final_decision_count(&db, run_id).await, 1);
         assert_eq!(evidence_bundle_count(&db, attempt_id).await, 1);
         assert_eq!(gate_evidence_link_count(&db, attempt_id).await, 1);
+        assert_eq!(
+            gate_artifact_content_type(&db, run_id).await,
+            Some("application/json".to_string())
+        );
     }
 
     #[tokio::test]
     async fn pending_human_review_skips_final_decision_record() {
         let db = shared_connection(open(":memory:").unwrap());
+        let artifacts = test_artifacts("pending-human-review");
         let mut contract = valid_contract();
         contract.requires_human_review = true;
 
@@ -293,9 +330,16 @@ mod tests {
         let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
         let final_decision = decide_from_gate_outputs(&gate_outputs, true);
 
-        finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision)
-            .await
-            .unwrap();
+        finalize_run_record(
+            &db,
+            &artifacts,
+            run_id,
+            attempt_id,
+            &gate_outputs,
+            &final_decision,
+        )
+        .await
+        .unwrap();
 
         let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
             .await
@@ -311,15 +355,23 @@ mod tests {
     #[tokio::test]
     async fn passing_non_human_review_run_gets_approved_final_decision() {
         let db = shared_connection(open(":memory:").unwrap());
+        let artifacts = test_artifacts("approved-final-decision");
         let contract = valid_contract();
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
         let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
         let final_decision = decide_from_gate_outputs(&gate_outputs, false);
 
-        finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision)
-            .await
-            .unwrap();
+        finalize_run_record(
+            &db,
+            &artifacts,
+            run_id,
+            attempt_id,
+            &gate_outputs,
+            &final_decision,
+        )
+        .await
+        .unwrap();
 
         let summary = with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
             .await
@@ -333,6 +385,7 @@ mod tests {
     #[tokio::test]
     async fn duplicate_final_decision_rolls_back_finalization() {
         let db = shared_connection(open(":memory:").unwrap());
+        let artifacts = test_artifacts("duplicate-final-decision");
         let contract = valid_contract();
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
@@ -340,8 +393,15 @@ mod tests {
         let final_decision = decide_from_gate_outputs(&gate_outputs, false);
         insert_final_decision(&db, run_id).await;
 
-        let result =
-            finalize_run_record(&db, run_id, attempt_id, &gate_outputs, &final_decision).await;
+        let result = finalize_run_record(
+            &db,
+            &artifacts,
+            run_id,
+            attempt_id,
+            &gate_outputs,
+            &final_decision,
+        )
+        .await;
 
         assert!(result.is_err());
         assert_eq!(attempt_status(&db, attempt_id).await, "RUNNING");
@@ -386,6 +446,24 @@ mod tests {
         assert_eq!(summary.status, "RUNNING");
     }
 
+    fn test_artifacts(name: &str) -> ArtifactStore {
+        ArtifactStore::new(test_artifact_root(name))
+    }
+
+    fn test_artifact_root(name: &str) -> PathBuf {
+        std::env::temp_dir()
+            .join("acceptability-engine-artifacts")
+            .join(name)
+            .join(test_unique_suffix())
+    }
+
+    fn test_unique_suffix() -> String {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap();
+        now.as_nanos().to_string()
+    }
+
     async fn final_decision_count(db: &SharedConnection, run_id: RunId) -> i64 {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
@@ -424,6 +502,17 @@ mod tests {
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn gate_artifact_content_type(db: &SharedConnection, run_id: RunId) -> Option<String> {
+        with_connection(db.clone(), move |conn| {
+            Ok(list_run_evidence(conn, run_id)?
+                .unwrap()
+                .into_iter()
+                .find_map(|evidence| evidence.content_type))
         })
         .await
         .unwrap()

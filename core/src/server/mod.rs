@@ -2,7 +2,7 @@ pub mod handlers;
 pub mod state;
 pub mod worker;
 
-use crate::store::SharedConnection;
+use crate::store::{ArtifactStore, SharedConnection};
 use crate::workspace_mode::WorkspaceMode;
 use axum::{
     routing::{get, post},
@@ -16,11 +16,13 @@ use worker::{run_queue, spawn_run_worker};
 pub async fn run_server(
     db: SharedConnection,
     workspace_root: PathBuf,
+    artifact_root: PathBuf,
     workspace_mode: WorkspaceMode,
     port: u16,
 ) -> Result<(), std::io::Error> {
     let (sender, receiver) = run_queue();
-    let worker = spawn_run_worker(db.clone(), receiver);
+    let artifact_store = ArtifactStore::new(artifact_root);
+    let worker = spawn_run_worker(db.clone(), artifact_store, receiver);
     let state = AppState {
         db,
         run_queue: sender,

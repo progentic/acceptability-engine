@@ -29,4 +29,11 @@ pub enum StoreError {
         #[source]
         source: tokio::task::JoinError,
     },
+    #[error("database connection pool closed")]
+    PoolClosed,
+    #[error("failed to write evidence artifact: {source}")]
+    ArtifactWriteFailed {
+        #[source]
+        source: std::io::Error,
+    },
 }
