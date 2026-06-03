@@ -10,7 +10,9 @@ use crate::store::{
     update_attempt_status, update_run_status, with_connection, with_transaction, ArtifactStore,
     AttemptId, RunId, SharedConnection,
 };
-use evidence_artifacts::record_gate_artifact;
+use evidence_artifacts::{
+    prepare_gate_artifact, record_gate_artifact_descriptor, PendingGateArtifact,
+};
 use state_machine::{FinalDecision, Run};
 use std::path::PathBuf;
 
@@ -137,18 +139,18 @@ async fn finalize_run_record(
     final_decision: &FinalDecision,
 ) -> Result<(), OrchestratorError> {
     let gate_outputs = gate_outputs.to_vec();
+    let gate_artifacts = prepare_gate_artifacts(artifact_store, run_id, attempt_id, &gate_outputs)?;
     let status = final_status(final_decision);
     let attempt_status = final_attempt_status(final_decision);
     let final_decision_record = persisted_final_decision(final_decision);
-    let artifact_store = artifact_store.clone();
     Ok(with_connection(db.clone(), move |conn| {
         with_transaction(conn, |transaction| {
             record_gate_outputs(
                 transaction,
-                &artifact_store,
                 run_id,
                 attempt_id,
                 &gate_outputs,
+                &gate_artifacts,
             )?;
             update_attempt_status(transaction, attempt_id, attempt_status)?;
             update_run_status(transaction, run_id, status)?;
@@ -156,6 +158,24 @@ async fn finalize_run_record(
         })
     })
     .await?)
+}
+
+fn prepare_gate_artifacts(
+    artifact_store: &ArtifactStore,
+    run_id: RunId,
+    attempt_id: AttemptId,
+    gate_outputs: &[GateOutput],
+) -> Result<Vec<PendingGateArtifact>, OrchestratorError> {
+    let mut artifacts = Vec::with_capacity(gate_outputs.len());
+    for output in gate_outputs {
+        artifacts.push(prepare_gate_artifact(
+            artifact_store,
+            run_id,
+            attempt_id,
+            output,
+        )?);
+    }
+    Ok(artifacts)
 }
 
 fn final_status(final_decision: &FinalDecision) -> &'static str {
@@ -197,21 +217,14 @@ fn record_persisted_final_decision(
 
 fn record_gate_outputs(
     conn: &crate::store::Connection,
-    artifact_store: &ArtifactStore,
     run_id: RunId,
     attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
+    gate_artifacts: &[PendingGateArtifact],
 ) -> Result<(), crate::error::StoreError> {
-    for output in gate_outputs {
+    for (output, artifact) in gate_outputs.iter().zip(gate_artifacts) {
         let gate_run_id = record_gate_run(conn, attempt_id, output)?;
-        record_gate_artifact(
-            conn,
-            artifact_store,
-            run_id,
-            attempt_id,
-            gate_run_id,
-            output,
-        )?;
+        record_gate_artifact_descriptor(conn, run_id, attempt_id, gate_run_id, artifact)?;
     }
     Ok(())
 }

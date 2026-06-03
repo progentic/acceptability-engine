@@ -2,30 +2,48 @@ use crate::error::StoreError;
 use crate::gates::result::{ExecutionResult, GateOutput, GateResult};
 use crate::store::{
     create_artifact_evidence_bundle, ArtifactInput, ArtifactStore, AttemptId, Connection,
-    GateRunId, RunId,
+    GateRunId, RunId, StoredArtifactDescriptor,
 };
 
-pub fn record_gate_artifact(
-    conn: &Connection,
+pub struct PendingGateArtifact {
+    descriptor: StoredArtifactDescriptor,
+}
+
+pub fn prepare_gate_artifact(
     artifact_store: &ArtifactStore,
     run_id: RunId,
     attempt_id: AttemptId,
-    gate_run_id: GateRunId,
     output: &GateOutput,
-) -> Result<(), StoreError> {
+) -> Result<PendingGateArtifact, StoreError> {
     let label = gate_artifact_label(output);
     let bytes = gate_artifact_bytes(output);
-    let artifact = artifact_store.write_artifact(ArtifactInput {
+    let descriptor = artifact_store.write_artifact(ArtifactInput {
         run_id,
         attempt_id: Some(attempt_id),
-        gate_run_id: Some(gate_run_id),
+        gate_run_id: None,
         kind: "gate-telemetry",
         label: &label,
         content_type: "application/json",
         summary: "gate telemetry artifact captured",
         bytes: &bytes,
     })?;
-    create_artifact_evidence_bundle(conn, run_id, Some(attempt_id), Some(gate_run_id), &artifact)?;
+    Ok(PendingGateArtifact { descriptor })
+}
+
+pub fn record_gate_artifact_descriptor(
+    conn: &Connection,
+    run_id: RunId,
+    attempt_id: AttemptId,
+    gate_run_id: GateRunId,
+    artifact: &PendingGateArtifact,
+) -> Result<(), StoreError> {
+    create_artifact_evidence_bundle(
+        conn,
+        run_id,
+        Some(attempt_id),
+        Some(gate_run_id),
+        &artifact.descriptor,
+    )?;
     Ok(())
 }
 

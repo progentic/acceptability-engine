@@ -13,7 +13,7 @@ mod schema;
 mod transaction;
 mod types;
 
-pub use artifacts::{ArtifactInput, ArtifactStore};
+pub use artifacts::{ArtifactInput, ArtifactStore, StoredArtifactDescriptor};
 pub use attempt_reads::{list_attempt_gates, list_run_attempts};
 #[cfg(test)]
 pub use connection::{open, shared_connection};

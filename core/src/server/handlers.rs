@@ -142,6 +142,127 @@ async fn mark_queued_run_failed(state: &AppState, run_id: RunId) {
     .await;
 }
 
+pub async fn get_run_status(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<crate::store::RunStatusSummary>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
+    match with_connection(state.db.clone(), move |conn| {
+        fetch_run_summary(conn, run_id)
+    })
+    .await
+    {
+        Ok(Some(summary)) => Ok(Json(summary)),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            format!(
+                "Run telemetry file record not found for ID '{}'",
+                run_id.get()
+            ),
+        )),
+        Err(store_error) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!(
+                "Failed to retrieve execution record from datastore: {}",
+                store_error
+            ),
+        )),
+    }
+}
+
+pub async fn list_run_attempts_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<AttemptSummary>>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
+    match with_connection(state.db.clone(), move |conn| {
+        list_run_attempts(conn, run_id)
+    })
+    .await
+    {
+        Ok(Some(attempts)) => Ok(Json(attempts)),
+        Ok(None) => missing_record("Run", run_id.get()),
+        Err(store_error) => store_query_error("Failed to query run attempts", store_error),
+    }
+}
+
+pub async fn list_attempt_gates_handler(
+    AxumPath(attempt_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<AttemptGateDetail>>, (StatusCode, String)> {
+    let attempt_id = AttemptId::new(attempt_id);
+    match with_connection(state.db.clone(), move |conn| {
+        list_attempt_gates(conn, attempt_id)
+    })
+    .await
+    {
+        Ok(Some(gates)) => Ok(Json(gates)),
+        Ok(None) => missing_record("Attempt", attempt_id.get()),
+        Err(store_error) => store_query_error("Failed to query attempt gates", store_error),
+    }
+}
+
+pub async fn list_run_evidence_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<Vec<EvidenceBundleSummary>>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
+    match with_connection(state.db.clone(), move |conn| {
+        list_run_evidence(conn, run_id)
+    })
+    .await
+    {
+        Ok(Some(evidence)) => Ok(Json(evidence)),
+        Ok(None) => missing_record("Run", run_id.get()),
+        Err(store_error) => store_query_error("Failed to query run evidence", store_error),
+    }
+}
+
+pub async fn list_runs_handler(
+    State(state): State<AppState>,
+    Query(query): Query<ListRunsQuery>,
+) -> Result<Json<Vec<RunListItem>>, (StatusCode, String)> {
+    let status_filter = query.status;
+    match with_connection(state.db.clone(), move |conn| {
+        list_runs(conn, status_filter.as_deref(), query.limit, query.offset)
+    })
+    .await
+    {
+        Ok(items) => Ok(Json(items)),
+        Err(StoreError::InvalidParameter(msg)) => Err((StatusCode::BAD_REQUEST, msg)),
+        Err(store_error) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to query run list: {}", store_error),
+        )),
+    }
+}
+
+fn internal_store_error(context: &'static str) -> impl FnOnce(StoreError) -> (StatusCode, String) {
+    move |store_error| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{}: {}", context, store_error),
+        )
+    }
+}
+
+fn missing_record<T>(record_type: &str, id: i64) -> Result<Json<T>, (StatusCode, String)> {
+    Err((
+        StatusCode::NOT_FOUND,
+        format!("{record_type} record not found for ID '{id}'"),
+    ))
+}
+
+fn store_query_error<T>(
+    context: &'static str,
+    store_error: StoreError,
+) -> Result<Json<T>, (StatusCode, String)> {
+    Err((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        format!("{context}: {store_error}"),
+    ))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -339,125 +460,4 @@ mod tests {
         .await
         .unwrap()
     }
-}
-
-pub async fn get_run_status(
-    AxumPath(run_id): AxumPath<i64>,
-    State(state): State<AppState>,
-) -> Result<Json<crate::store::RunStatusSummary>, (StatusCode, String)> {
-    let run_id = RunId::new(run_id);
-    match with_connection(state.db.clone(), move |conn| {
-        fetch_run_summary(conn, run_id)
-    })
-    .await
-    {
-        Ok(Some(summary)) => Ok(Json(summary)),
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            format!(
-                "Run telemetry file record not found for ID '{}'",
-                run_id.get()
-            ),
-        )),
-        Err(store_error) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!(
-                "Failed to retrieve execution record from datastore: {}",
-                store_error
-            ),
-        )),
-    }
-}
-
-pub async fn list_run_attempts_handler(
-    AxumPath(run_id): AxumPath<i64>,
-    State(state): State<AppState>,
-) -> Result<Json<Vec<AttemptSummary>>, (StatusCode, String)> {
-    let run_id = RunId::new(run_id);
-    match with_connection(state.db.clone(), move |conn| {
-        list_run_attempts(conn, run_id)
-    })
-    .await
-    {
-        Ok(Some(attempts)) => Ok(Json(attempts)),
-        Ok(None) => missing_record("Run", run_id.get()),
-        Err(store_error) => store_query_error("Failed to query run attempts", store_error),
-    }
-}
-
-pub async fn list_attempt_gates_handler(
-    AxumPath(attempt_id): AxumPath<i64>,
-    State(state): State<AppState>,
-) -> Result<Json<Vec<AttemptGateDetail>>, (StatusCode, String)> {
-    let attempt_id = AttemptId::new(attempt_id);
-    match with_connection(state.db.clone(), move |conn| {
-        list_attempt_gates(conn, attempt_id)
-    })
-    .await
-    {
-        Ok(Some(gates)) => Ok(Json(gates)),
-        Ok(None) => missing_record("Attempt", attempt_id.get()),
-        Err(store_error) => store_query_error("Failed to query attempt gates", store_error),
-    }
-}
-
-pub async fn list_run_evidence_handler(
-    AxumPath(run_id): AxumPath<i64>,
-    State(state): State<AppState>,
-) -> Result<Json<Vec<EvidenceBundleSummary>>, (StatusCode, String)> {
-    let run_id = RunId::new(run_id);
-    match with_connection(state.db.clone(), move |conn| {
-        list_run_evidence(conn, run_id)
-    })
-    .await
-    {
-        Ok(Some(evidence)) => Ok(Json(evidence)),
-        Ok(None) => missing_record("Run", run_id.get()),
-        Err(store_error) => store_query_error("Failed to query run evidence", store_error),
-    }
-}
-
-pub async fn list_runs_handler(
-    State(state): State<AppState>,
-    Query(query): Query<ListRunsQuery>,
-) -> Result<Json<Vec<RunListItem>>, (StatusCode, String)> {
-    let status_filter = query.status;
-    match with_connection(state.db.clone(), move |conn| {
-        list_runs(conn, status_filter.as_deref(), query.limit, query.offset)
-    })
-    .await
-    {
-        Ok(items) => Ok(Json(items)),
-        Err(StoreError::InvalidParameter(msg)) => Err((StatusCode::BAD_REQUEST, msg)),
-        Err(store_error) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("Failed to query run list: {}", store_error),
-        )),
-    }
-}
-
-fn internal_store_error(context: &'static str) -> impl FnOnce(StoreError) -> (StatusCode, String) {
-    move |store_error| {
-        (
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("{}: {}", context, store_error),
-        )
-    }
-}
-
-fn missing_record<T>(record_type: &str, id: i64) -> Result<Json<T>, (StatusCode, String)> {
-    Err((
-        StatusCode::NOT_FOUND,
-        format!("{record_type} record not found for ID '{id}'"),
-    ))
-}
-
-fn store_query_error<T>(
-    context: &'static str,
-    store_error: StoreError,
-) -> Result<Json<T>, (StatusCode, String)> {
-    Err((
-        StatusCode::INTERNAL_SERVER_ERROR,
-        format!("{context}: {store_error}"),
-    ))
 }

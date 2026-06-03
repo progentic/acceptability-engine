@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.17] - 2026-06-03 - Coding Style Compliance
+
+### Added
+- **Legacy Migration SQL Files** - Added external SQL files for attempts rebuilds, legacy gate run migration, and evidence bundle rebuilds
+
+### Changed
+- **Artifact Finalization Order** - Gate telemetry artifacts are now written before SQLite finalization begins, keeping filesystem writes out of the database transaction
+- **Schema Coordinator Shape** - Reduced `schema.rs` to migration coordination, schema-shape checks, and migration dispatch instead of embedding large legacy SQL bodies
+- **Handler Narrative Order** - Moved HTTP handler tests below production handler code so `server/handlers.rs` follows top-down production flow
+
 ## [0.0.16] - 2026-06-03 - Production Evidence Store
 
 ### Added
