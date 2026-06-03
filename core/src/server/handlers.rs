@@ -1,15 +1,16 @@
 use super::state::AppState;
 use crate::contract::Contract;
-use crate::error::StoreError;
+use crate::error::{StoreError, ValidationError};
 use crate::orchestrator::run_contract;
 use crate::orchestrator::state_machine::FinalDecision;
 use crate::store::{fetch_run_summary, list_runs, RunListItem};
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path as AxumPath, Query, State},
     http::StatusCode,
     Json,
 };
 use serde::{Deserialize, Serialize};
+use std::path::{Component, Path, PathBuf};
 
 #[derive(Serialize)]
 pub struct SubmitResponse {
@@ -30,6 +31,26 @@ fn default_limit() -> u32 {
     50
 }
 
+fn resolve_runtime_workspace(
+    workspace_root: &Path,
+    contract: &Contract,
+) -> Result<PathBuf, ValidationError> {
+    if !is_single_workspace_segment(&contract.id) {
+        return Err(ValidationError::WorkspaceEscapesRoot);
+    }
+
+    let runtime_workspace = workspace_root.join(&contract.id);
+    if !runtime_workspace.starts_with(workspace_root) {
+        return Err(ValidationError::WorkspaceEscapesRoot);
+    }
+    Ok(runtime_workspace)
+}
+
+fn is_single_workspace_segment(id: &str) -> bool {
+    let mut components = Path::new(id).components();
+    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
+}
+
 pub async fn submit_contract(
     State(state): State<AppState>,
     Json(contract): Json<Contract>,
@@ -41,8 +62,13 @@ pub async fn submit_contract(
         ));
     }
 
-    let mut runtime_workspace = state.workspace_root.clone();
-    runtime_workspace.push(&contract.id);
+    let runtime_workspace =
+        resolve_runtime_workspace(&state.workspace_root, &contract).map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Runtime workspace validation failed: {}", error),
+            )
+        })?;
 
     match run_contract(state.db.clone(), contract, runtime_workspace).await {
         Ok(FinalDecision::Approve) => Ok(Json(SubmitResponse {
@@ -63,8 +89,39 @@ pub async fn submit_contract(
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn contract_with_id(id: &str) -> Contract {
+        Contract {
+            id: id.to_string(),
+            repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
+            base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            scopes: vec!["core/src".to_string()],
+            requires_human_review: false,
+        }
+    }
+
+    #[test]
+    fn resolves_runtime_workspace_under_root() {
+        let root = Path::new("/tmp/acceptability-workspaces");
+        let workspace = resolve_runtime_workspace(root, &contract_with_id("run-001")).unwrap();
+
+        assert_eq!(workspace, root.join("run-001"));
+    }
+
+    #[test]
+    fn rejects_runtime_workspace_that_escapes_root() {
+        let root = Path::new("/tmp/acceptability-workspaces");
+        let result = resolve_runtime_workspace(root, &contract_with_id("../escape"));
+
+        assert!(matches!(result, Err(ValidationError::WorkspaceEscapesRoot)));
+    }
+}
+
 pub async fn get_run_status(
-    Path(run_id): Path<i64>,
+    AxumPath(run_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<crate::store::RunStatusSummary>, (StatusCode, String)> {
     let database_guard = state.db.lock().await;

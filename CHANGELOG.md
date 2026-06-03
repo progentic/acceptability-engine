@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.2] - 2026-06-03 - Contract Workspace Validation Hardening
+
+### Added
+- **Contract Validation Rules** - Added validation for safe contract IDs, supported Git repository URLs, and normalized relative scope paths
+- **Workspace Containment Check** - Added runtime workspace resolution that rejects contract IDs which escape the configured workspace root
+
+### Changed
+- **HTTP Path Extractor Import** - Aliased Axum's path extractor so filesystem path validation can use `std::path::Path` without ambiguity
+
+### Updated
+- **Validation Coverage** - Added unit tests for path traversal IDs, unsafe scope paths, repeated scope separators, trailing scope separators, unsupported repo URLs, SSH repo URLs, and workspace containment
+
 ## [0.0.1] - 2026-06-03 - Compile Baseline Stabilization
 
 ### Added
