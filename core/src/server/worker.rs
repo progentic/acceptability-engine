@@ -1,6 +1,6 @@
 use crate::contract::Contract;
 use crate::orchestrator::{execute_existing_run, state_machine::FinalDecision};
-use crate::store::{update_run_status, with_connection, SharedConnection};
+use crate::store::{update_run_status, with_connection, RunId, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -9,7 +9,7 @@ pub const RUN_QUEUE_CAPACITY: usize = 64;
 
 #[derive(Debug)]
 pub struct RunWork {
-    pub run_id: i64,
+    pub run_id: RunId,
     pub contract: Contract,
     pub workspace: PathBuf,
 }
@@ -62,7 +62,7 @@ fn should_mark_internal_failure(
     result.is_err()
 }
 
-pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: i64) {
+pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: RunId) {
     let _ = with_connection(db.clone(), move |conn| {
         update_run_status(conn, run_id, "FAILED_INTERNAL")
     })
@@ -77,7 +77,7 @@ mod tests {
     async fn creates_bounded_run_queue() {
         let (sender, mut receiver) = run_queue();
         let work = RunWork {
-            run_id: 1,
+            run_id: RunId::new(1),
             contract: Contract {
                 id: "run-001".to_string(),
                 repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
@@ -91,7 +91,7 @@ mod tests {
         sender.send(work).await.unwrap();
 
         let queued = receiver.recv().await.unwrap();
-        assert_eq!(queued.run_id, 1);
+        assert_eq!(queued.run_id, RunId::new(1));
     }
 
     #[test]

@@ -6,7 +6,8 @@ use crate::gates::result::GateOutput;
 use crate::gates::runner::run_gates_sequential;
 use crate::store::{
     create_attempt, create_evidence_bundle, create_run, record_final_decision, record_gate_run,
-    update_attempt_status, update_run_status, with_connection, with_transaction, SharedConnection,
+    update_attempt_status, update_run_status, with_connection, with_transaction, AttemptId, RunId,
+    SharedConnection,
 };
 use state_machine::{FinalDecision, Run};
 use std::path::PathBuf;
@@ -22,7 +23,7 @@ pub async fn run_contract(
 
 pub async fn execute_existing_run(
     db: SharedConnection,
-    run_id: i64,
+    run_id: RunId,
     contract: Contract,
     workspace: PathBuf,
 ) -> Result<FinalDecision, OrchestratorError> {
@@ -47,26 +48,29 @@ pub async fn execute_existing_run(
 async fn create_run_record(
     db: &SharedConnection,
     contract: &Contract,
-) -> Result<i64, OrchestratorError> {
+) -> Result<RunId, OrchestratorError> {
     let contract = contract.clone();
     Ok(with_connection(db.clone(), move |conn| create_run(conn, &contract)).await?)
 }
 
-async fn mark_run_running(db: &SharedConnection, run_id: i64) -> Result<(), OrchestratorError> {
+async fn mark_run_running(db: &SharedConnection, run_id: RunId) -> Result<(), OrchestratorError> {
     Ok(with_connection(db.clone(), move |conn| {
         update_run_status(conn, run_id, "RUNNING")
     })
     .await?)
 }
 
-async fn create_run_attempt(db: &SharedConnection, run_id: i64) -> Result<i64, OrchestratorError> {
+async fn create_run_attempt(
+    db: &SharedConnection,
+    run_id: RunId,
+) -> Result<AttemptId, OrchestratorError> {
     Ok(with_connection(db.clone(), move |conn| create_attempt(conn, run_id)).await?)
 }
 
 async fn finalize_internal_error(
     db: &SharedConnection,
-    run_id: i64,
-    attempt_id: i64,
+    run_id: RunId,
+    attempt_id: AttemptId,
 ) -> Result<(), OrchestratorError> {
     Ok(with_connection(db.clone(), move |conn| {
         with_transaction(conn, |transaction| {
@@ -114,8 +118,8 @@ fn decide_from_gate_outputs(
 
 async fn finalize_run_record(
     db: &SharedConnection,
-    run_id: i64,
-    attempt_id: i64,
+    run_id: RunId,
+    attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
     final_decision: &FinalDecision,
 ) -> Result<(), OrchestratorError> {
@@ -161,7 +165,7 @@ fn persisted_final_decision(
 
 fn record_persisted_final_decision(
     conn: &crate::store::Connection,
-    run_id: i64,
+    run_id: RunId,
     decision: Option<(&str, Option<String>)>,
 ) -> Result<(), crate::error::StoreError> {
     let Some((status, reason)) = decision else {
@@ -173,8 +177,8 @@ fn record_persisted_final_decision(
 
 fn record_gate_outputs(
     conn: &crate::store::Connection,
-    run_id: i64,
-    attempt_id: i64,
+    run_id: RunId,
+    attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
 ) -> Result<(), crate::error::StoreError> {
     for output in gate_outputs {
@@ -382,11 +386,11 @@ mod tests {
         assert_eq!(summary.status, "RUNNING");
     }
 
-    async fn final_decision_count(db: &SharedConnection, run_id: i64) -> i64 {
+    async fn final_decision_count(db: &SharedConnection, run_id: RunId) -> i64 {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
                 "SELECT COUNT(*) FROM final_decisions WHERE run_id = ?1",
-                rusqlite::params![run_id],
+                rusqlite::params![run_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
@@ -395,11 +399,11 @@ mod tests {
         .unwrap()
     }
 
-    async fn evidence_bundle_count(db: &SharedConnection, attempt_id: i64) -> i64 {
+    async fn evidence_bundle_count(db: &SharedConnection, attempt_id: AttemptId) -> i64 {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
                 "SELECT COUNT(*) FROM evidence_bundles WHERE attempt_id = ?1",
-                rusqlite::params![attempt_id],
+                rusqlite::params![attempt_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
@@ -408,7 +412,7 @@ mod tests {
         .unwrap()
     }
 
-    async fn gate_evidence_link_count(db: &SharedConnection, attempt_id: i64) -> i64 {
+    async fn gate_evidence_link_count(db: &SharedConnection, attempt_id: AttemptId) -> i64 {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
                 "SELECT COUNT(*)
@@ -416,7 +420,7 @@ mod tests {
                  WHERE attempt_id = ?1
                    AND run_id IS NOT NULL
                    AND gate_run_id IS NOT NULL",
-                rusqlite::params![attempt_id],
+                rusqlite::params![attempt_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
@@ -425,11 +429,11 @@ mod tests {
         .unwrap()
     }
 
-    async fn attempt_status(db: &SharedConnection, attempt_id: i64) -> String {
+    async fn attempt_status(db: &SharedConnection, attempt_id: AttemptId) -> String {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
                 "SELECT status FROM attempts WHERE id = ?1",
-                rusqlite::params![attempt_id],
+                rusqlite::params![attempt_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
@@ -438,7 +442,7 @@ mod tests {
         .unwrap()
     }
 
-    async fn insert_final_decision(db: &SharedConnection, run_id: i64) {
+    async fn insert_final_decision(db: &SharedConnection, run_id: RunId) {
         with_connection(db.clone(), move |conn| {
             crate::store::record_final_decision(conn, run_id, "APPROVED", None)?;
             Ok(())
@@ -447,7 +451,7 @@ mod tests {
         .unwrap();
     }
 
-    async fn latest_summary_gate_count(db: &SharedConnection, run_id: i64) -> usize {
+    async fn latest_summary_gate_count(db: &SharedConnection, run_id: RunId) -> usize {
         with_connection(db.clone(), move |conn| fetch_run_summary(conn, run_id))
             .await
             .unwrap()
@@ -456,7 +460,7 @@ mod tests {
             .len()
     }
 
-    async fn engine_error_evidence_count(db: &SharedConnection, attempt_id: i64) -> i64 {
+    async fn engine_error_evidence_count(db: &SharedConnection, attempt_id: AttemptId) -> i64 {
         with_connection(db.clone(), move |conn| {
             conn.query_row(
                 "SELECT COUNT(*)
@@ -464,7 +468,7 @@ mod tests {
                  WHERE attempt_id = ?1
                    AND gate_run_id IS NULL
                    AND summary = 'engine error during gate execution'",
-                rusqlite::params![attempt_id],
+                rusqlite::params![attempt_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })

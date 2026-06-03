@@ -1,3 +1,4 @@
+use super::types::{AttemptId, GateRunId};
 use crate::error::StoreError;
 use crate::gates::result::{ExecutionResult, GateOutput, GateResult, TestMetrics};
 use rusqlite::Connection;
@@ -18,9 +19,9 @@ struct GateRecord<'a> {
 
 pub fn record_gate_run(
     conn: &Connection,
-    attempt_id: i64,
+    attempt_id: AttemptId,
     output: &GateOutput,
-) -> Result<i64, StoreError> {
+) -> Result<GateRunId, StoreError> {
     insert_gate_record(conn, attempt_id, &gate_record_from_output(output))
 }
 
@@ -82,16 +83,16 @@ fn parse_errors(metrics: Option<&TestMetrics>) -> Option<u32> {
 
 fn insert_gate_record(
     conn: &Connection,
-    attempt_id: i64,
+    attempt_id: AttemptId,
     record: &GateRecord<'_>,
-) -> Result<i64, StoreError> {
+) -> Result<GateRunId, StoreError> {
     conn.execute(
         "INSERT INTO gate_runs (
             attempt_id, gate_num, passed, message, exit_code, duration_ms, 
             stdout, stderr, test_passed, test_failed, test_ignored, parse_errors
          ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
-            attempt_id,
+            attempt_id.get(),
             record.gate_num,
             record.passed as i32,
             record.message,
@@ -106,5 +107,5 @@ fn insert_gate_record(
         ],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
-    Ok(conn.last_insert_rowid())
+    Ok(GateRunId::new(conn.last_insert_rowid()))
 }

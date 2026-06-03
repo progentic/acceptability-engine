@@ -1,11 +1,11 @@
 use super::mappers::{attempt_gate_detail_from_row, attempt_summary_from_row};
-use super::types::{AttemptGateDetail, AttemptSummary};
+use super::types::{AttemptGateDetail, AttemptId, AttemptSummary, RunId};
 use crate::error::StoreError;
 use rusqlite::{Connection, Row, Rows};
 
 pub fn list_run_attempts(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Option<Vec<AttemptSummary>>, StoreError> {
     if !run_exists(conn, run_id)? {
         return Ok(None);
@@ -15,7 +15,7 @@ pub fn list_run_attempts(
 
 pub fn list_attempt_gates(
     conn: &Connection,
-    attempt_id: i64,
+    attempt_id: AttemptId,
 ) -> Result<Option<Vec<AttemptGateDetail>>, StoreError> {
     if !attempt_exists(conn, attempt_id)? {
         return Ok(None);
@@ -23,11 +23,11 @@ pub fn list_attempt_gates(
     Ok(Some(query_attempt_gates(conn, attempt_id)?))
 }
 
-fn run_exists(conn: &Connection, run_id: i64) -> Result<bool, StoreError> {
+fn run_exists(conn: &Connection, run_id: RunId) -> Result<bool, StoreError> {
     record_exists(conn, "SELECT 1 FROM runs WHERE id = ?1 LIMIT 1", run_id)
 }
 
-fn attempt_exists(conn: &Connection, attempt_id: i64) -> Result<bool, StoreError> {
+fn attempt_exists(conn: &Connection, attempt_id: AttemptId) -> Result<bool, StoreError> {
     record_exists(
         conn,
         "SELECT 1 FROM attempts WHERE id = ?1 LIMIT 1",
@@ -35,17 +35,20 @@ fn attempt_exists(conn: &Connection, attempt_id: i64) -> Result<bool, StoreError
     )
 }
 
-fn record_exists(conn: &Connection, sql: &str, id: i64) -> Result<bool, StoreError> {
+fn record_exists<T>(conn: &Connection, sql: &str, id: T) -> Result<bool, StoreError>
+where
+    T: Into<i64>,
+{
     let mut stmt = conn
         .prepare(sql)
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
-        .query(rusqlite::params![id])
+        .query(rusqlite::params![id.into()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     next_row(&mut rows).map(|row| row.is_some())
 }
 
-fn query_run_attempts(conn: &Connection, run_id: i64) -> Result<Vec<AttemptSummary>, StoreError> {
+fn query_run_attempts(conn: &Connection, run_id: RunId) -> Result<Vec<AttemptSummary>, StoreError> {
     let mut stmt = conn
         .prepare(
             "SELECT id, run_id, attempt_number, status, created_at
@@ -55,14 +58,14 @@ fn query_run_attempts(conn: &Connection, run_id: i64) -> Result<Vec<AttemptSumma
         )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![run_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_attempt_summaries(rows)
 }
 
 fn query_attempt_gates(
     conn: &Connection,
-    attempt_id: i64,
+    attempt_id: AttemptId,
 ) -> Result<Vec<AttemptGateDetail>, StoreError> {
     let mut stmt = conn
         .prepare(
@@ -74,7 +77,7 @@ fn query_attempt_gates(
         )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![attempt_id])
+        .query(rusqlite::params![attempt_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_attempt_gate_details(rows)
 }

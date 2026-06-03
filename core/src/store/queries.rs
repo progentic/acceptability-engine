@@ -1,5 +1,5 @@
 use super::mappers::{gate_summary_from_row, run_list_item_from_row, run_summary_from_row};
-use super::types::{GateRunSummary, RunListItem, RunStatusSummary};
+use super::types::{AttemptId, GateRunSummary, RunId, RunListItem, RunStatusSummary};
 use crate::error::StoreError;
 use rusqlite::{Connection, Row, Rows};
 
@@ -7,7 +7,7 @@ const MAX_RUN_LIST_LIMIT: u32 = 100;
 
 pub fn fetch_run_summary(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Option<RunStatusSummary>, StoreError> {
     let Some(mut summary) = fetch_run_header(conn, run_id)? else {
         return Ok(None);
@@ -28,13 +28,13 @@ pub fn list_runs(
 
 fn fetch_run_header(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Option<RunStatusSummary>, StoreError> {
     let mut stmt = conn
         .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE id = ?1")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![run_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     let Some(row) = next_row(&mut rows)? else {
         return Ok(None);
@@ -44,7 +44,7 @@ fn fetch_run_header(
 
 fn fetch_latest_attempt_gates(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Vec<GateRunSummary>, StoreError> {
     let Some(attempt_id) = fetch_latest_attempt_id(conn, run_id)? else {
         return Ok(Vec::new());
@@ -52,32 +52,35 @@ fn fetch_latest_attempt_gates(
     fetch_gate_summaries(conn, attempt_id)
 }
 
-fn fetch_latest_attempt_id(conn: &Connection, run_id: i64) -> Result<Option<i64>, StoreError> {
+fn fetch_latest_attempt_id(
+    conn: &Connection,
+    run_id: RunId,
+) -> Result<Option<AttemptId>, StoreError> {
     let mut stmt = conn
         .prepare(
             "SELECT id FROM attempts WHERE run_id = ?1 ORDER BY attempt_number DESC, id DESC LIMIT 1",
         )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![run_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     let Some(row) = next_row(&mut rows)? else {
         return Ok(None);
     };
     row.get(0)
-        .map(Some)
+        .map(|value| Some(AttemptId::new(value)))
         .map_err(|source| StoreError::QueryFailed { source })
 }
 
 fn fetch_gate_summaries(
     conn: &Connection,
-    attempt_id: i64,
+    attempt_id: AttemptId,
 ) -> Result<Vec<GateRunSummary>, StoreError> {
     let mut stmt = conn
         .prepare("SELECT gate_num, passed, message, exit_code, duration_ms FROM gate_runs WHERE attempt_id = ?1 ORDER BY gate_num ASC")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![attempt_id])
+        .query(rusqlite::params![attempt_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_gate_summaries(rows)
 }

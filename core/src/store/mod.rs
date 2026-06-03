@@ -25,7 +25,8 @@ pub use runs::{
 pub use rusqlite::Connection;
 pub use transaction::with_transaction;
 pub use types::{
-    AttemptGateDetail, AttemptSummary, EvidenceBundleSummary, RunListItem, RunStatusSummary,
+    AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleSummary, RunId, RunListItem,
+    RunStatusSummary,
 };
 
 #[cfg(test)]
@@ -37,7 +38,7 @@ mod tests {
     #[tokio::test]
     async fn test_fetch_run_not_found() {
         let conn = open(":memory:").unwrap();
-        let result = fetch_run_summary(&conn, 999).unwrap();
+        let result = fetch_run_summary(&conn, RunId::new(999)).unwrap();
         assert!(result.is_none());
     }
 
@@ -149,7 +150,7 @@ mod tests {
     fn returns_none_for_missing_run_attempts() {
         let conn = open(":memory:").unwrap();
 
-        let attempts = list_run_attempts(&conn, 999).unwrap();
+        let attempts = list_run_attempts(&conn, RunId::new(999)).unwrap();
 
         assert!(attempts.is_none());
     }

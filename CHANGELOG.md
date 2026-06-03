@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.14] - 2026-06-03 - Typed Orchestration IDs
+
+### Added
+- **Domain ID Types** - Added typed `RunId`, `AttemptId`, `GateRunId`, `EvidenceBundleId`, and `FinalDecisionId` wrappers for persistence identifiers
+- **Typed ID Serialization** - Added transparent JSON serialization for ID wrappers so API responses keep numeric IDs while internal code gets stronger types
+
+### Changed
+- **Orchestration ID Flow** - Replaced raw run and attempt IDs across orchestration finalization with typed domain IDs
+- **Store ID Boundary** - Updated store read and write helpers to accept typed IDs instead of interchangeable `i64` values
+- **Worker Queue IDs** - Updated queued run work to carry `RunId` so background execution cannot confuse run IDs with other persistence IDs
+
 ## [0.0.13] - 2026-06-03 - Explicit Workspace Mode
 
 ### Added

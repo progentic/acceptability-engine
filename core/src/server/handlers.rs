@@ -4,8 +4,8 @@ use crate::contract::Contract;
 use crate::error::{StoreError, ValidationError};
 use crate::store::{
     create_queued_run, fetch_run_summary, list_attempt_gates, list_run_attempts, list_run_evidence,
-    list_runs, update_run_status, with_connection, AttemptGateDetail, AttemptSummary,
-    EvidenceBundleSummary, RunListItem,
+    list_runs, update_run_status, with_connection, AttemptGateDetail, AttemptId, AttemptSummary,
+    EvidenceBundleSummary, RunId, RunListItem,
 };
 use crate::workspace_mode::WorkspaceMode;
 use axum::{
@@ -18,7 +18,7 @@ use std::path::{Component, Path, PathBuf};
 
 #[derive(Serialize)]
 pub struct SubmitResponse {
-    pub run_id: i64,
+    pub run_id: RunId,
     pub status: String,
     pub reason: Option<String>,
 }
@@ -103,7 +103,7 @@ pub async fn submit_contract(
 async fn create_queued_run_record(
     state: &AppState,
     contract: &Contract,
-) -> Result<i64, (StatusCode, String)> {
+) -> Result<RunId, (StatusCode, String)> {
     let contract = contract.clone();
     with_connection(state.db.clone(), move |conn| {
         create_queued_run(conn, &contract)
@@ -114,7 +114,7 @@ async fn create_queued_run_record(
 
 async fn enqueue_contract_run(
     state: &AppState,
-    run_id: i64,
+    run_id: RunId,
     contract: Contract,
     workspace: PathBuf,
 ) -> Result<(), (StatusCode, String)> {
@@ -135,7 +135,7 @@ async fn enqueue_contract_run(
     ))
 }
 
-async fn mark_queued_run_failed(state: &AppState, run_id: i64) {
+async fn mark_queued_run_failed(state: &AppState, run_id: RunId) {
     let _ = with_connection(state.db.clone(), move |conn| {
         update_run_status(conn, run_id, "FAILED_INTERNAL")
     })
@@ -184,7 +184,7 @@ mod tests {
         let state = state_with_seeded_run("handler-attempts");
         let run_id = create_attempt_test_data(&state, "handler-attempts").await;
 
-        let Json(attempts) = list_run_attempts_handler(AxumPath(run_id), State(state))
+        let Json(attempts) = list_run_attempts_handler(AxumPath(run_id.get()), State(state))
             .await
             .unwrap();
 
@@ -199,7 +199,7 @@ mod tests {
         let run_id = create_attempt_test_data(&state, "handler-gates").await;
         let attempt_id = latest_attempt_id(&state, run_id).await;
 
-        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id), State(state))
+        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id.get()), State(state))
             .await
             .unwrap();
 
@@ -213,7 +213,7 @@ mod tests {
         let state = state_with_seeded_run("handler-evidence");
         let run_id = create_attempt_test_data(&state, "handler-evidence").await;
 
-        let Json(evidence) = list_run_evidence_handler(AxumPath(run_id), State(state))
+        let Json(evidence) = list_run_evidence_handler(AxumPath(run_id.get()), State(state))
             .await
             .unwrap();
 
@@ -261,14 +261,14 @@ mod tests {
         let attempt_id = create_empty_attempt(&state, "handler-empty-attempt").await;
 
         let Json(attempts) =
-            list_run_attempts_handler(AxumPath(empty_run_id), State(state.clone()))
+            list_run_attempts_handler(AxumPath(empty_run_id.get()), State(state.clone()))
                 .await
                 .unwrap();
         let Json(evidence) =
-            list_run_evidence_handler(AxumPath(empty_run_id), State(state.clone()))
+            list_run_evidence_handler(AxumPath(empty_run_id.get()), State(state.clone()))
                 .await
                 .unwrap();
-        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id), State(state))
+        let Json(gates) = list_attempt_gates_handler(AxumPath(attempt_id.get()), State(state))
             .await
             .unwrap();
 
@@ -289,7 +289,7 @@ mod tests {
         }
     }
 
-    async fn create_attempt_test_data(state: &AppState, id: &str) -> i64 {
+    async fn create_attempt_test_data(state: &AppState, id: &str) -> RunId {
         let contract = contract_with_id(id);
         with_connection(state.db.clone(), move |conn| {
             let run_id = create_run(conn, &contract)?;
@@ -315,7 +315,7 @@ mod tests {
         .unwrap()
     }
 
-    async fn latest_attempt_id(state: &AppState, run_id: i64) -> i64 {
+    async fn latest_attempt_id(state: &AppState, run_id: RunId) -> AttemptId {
         with_connection(state.db.clone(), move |conn| {
             Ok(list_run_attempts(conn, run_id)?.unwrap()[0].attempt_id)
         })
@@ -323,14 +323,14 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_empty_run(state: &AppState, id: &str) -> i64 {
+    async fn create_empty_run(state: &AppState, id: &str) -> RunId {
         let contract = contract_with_id(id);
         with_connection(state.db.clone(), move |conn| create_run(conn, &contract))
             .await
             .unwrap()
     }
 
-    async fn create_empty_attempt(state: &AppState, id: &str) -> i64 {
+    async fn create_empty_attempt(state: &AppState, id: &str) -> AttemptId {
         let contract = contract_with_id(id);
         with_connection(state.db.clone(), move |conn| {
             let run_id = create_run(conn, &contract)?;
@@ -345,6 +345,7 @@ pub async fn get_run_status(
     AxumPath(run_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<crate::store::RunStatusSummary>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
     match with_connection(state.db.clone(), move |conn| {
         fetch_run_summary(conn, run_id)
     })
@@ -353,7 +354,10 @@ pub async fn get_run_status(
         Ok(Some(summary)) => Ok(Json(summary)),
         Ok(None) => Err((
             StatusCode::NOT_FOUND,
-            format!("Run telemetry file record not found for ID '{}'", run_id),
+            format!(
+                "Run telemetry file record not found for ID '{}'",
+                run_id.get()
+            ),
         )),
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -369,13 +373,14 @@ pub async fn list_run_attempts_handler(
     AxumPath(run_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<AttemptSummary>>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
     match with_connection(state.db.clone(), move |conn| {
         list_run_attempts(conn, run_id)
     })
     .await
     {
         Ok(Some(attempts)) => Ok(Json(attempts)),
-        Ok(None) => missing_record("Run", run_id),
+        Ok(None) => missing_record("Run", run_id.get()),
         Err(store_error) => store_query_error("Failed to query run attempts", store_error),
     }
 }
@@ -384,13 +389,14 @@ pub async fn list_attempt_gates_handler(
     AxumPath(attempt_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<AttemptGateDetail>>, (StatusCode, String)> {
+    let attempt_id = AttemptId::new(attempt_id);
     match with_connection(state.db.clone(), move |conn| {
         list_attempt_gates(conn, attempt_id)
     })
     .await
     {
         Ok(Some(gates)) => Ok(Json(gates)),
-        Ok(None) => missing_record("Attempt", attempt_id),
+        Ok(None) => missing_record("Attempt", attempt_id.get()),
         Err(store_error) => store_query_error("Failed to query attempt gates", store_error),
     }
 }
@@ -399,13 +405,14 @@ pub async fn list_run_evidence_handler(
     AxumPath(run_id): AxumPath<i64>,
     State(state): State<AppState>,
 ) -> Result<Json<Vec<EvidenceBundleSummary>>, (StatusCode, String)> {
+    let run_id = RunId::new(run_id);
     match with_connection(state.db.clone(), move |conn| {
         list_run_evidence(conn, run_id)
     })
     .await
     {
         Ok(Some(evidence)) => Ok(Json(evidence)),
-        Ok(None) => missing_record("Run", run_id),
+        Ok(None) => missing_record("Run", run_id.get()),
         Err(store_error) => store_query_error("Failed to query run evidence", store_error),
     }
 }

@@ -1,11 +1,11 @@
 use super::mappers::evidence_bundle_summary_from_row;
-use super::types::EvidenceBundleSummary;
+use super::types::{EvidenceBundleSummary, RunId};
 use crate::error::StoreError;
 use rusqlite::{Connection, Row, Rows};
 
 pub fn list_run_evidence(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Option<Vec<EvidenceBundleSummary>>, StoreError> {
     if !run_exists(conn, run_id)? {
         return Ok(None);
@@ -13,19 +13,19 @@ pub fn list_run_evidence(
     Ok(Some(query_run_evidence(conn, run_id)?))
 }
 
-fn run_exists(conn: &Connection, run_id: i64) -> Result<bool, StoreError> {
+fn run_exists(conn: &Connection, run_id: RunId) -> Result<bool, StoreError> {
     let mut stmt = conn
         .prepare("SELECT 1 FROM runs WHERE id = ?1 LIMIT 1")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![run_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     next_row(&mut rows).map(|row| row.is_some())
 }
 
 fn query_run_evidence(
     conn: &Connection,
-    run_id: i64,
+    run_id: RunId,
 ) -> Result<Vec<EvidenceBundleSummary>, StoreError> {
     let mut stmt = conn
         .prepare(
@@ -36,7 +36,7 @@ fn query_run_evidence(
         )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![run_id])
+        .query(rusqlite::params![run_id.get()])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_evidence_bundles(rows)
 }

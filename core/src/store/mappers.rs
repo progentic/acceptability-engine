@@ -1,6 +1,6 @@
 use super::types::{
-    AttemptGateDetail, AttemptSummary, EvidenceBundleSummary, GateRunSummary, RunListItem,
-    RunStatusSummary,
+    AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleId, EvidenceBundleSummary,
+    GateRunId, GateRunSummary, RunId, RunListItem, RunStatusSummary,
 };
 use crate::error::StoreError;
 use rusqlite::Row;
@@ -9,7 +9,7 @@ const GATE_OUTPUT_TEXT_LIMIT: usize = 8 * 1024;
 
 pub(super) fn run_summary_from_row(row: &Row<'_>) -> Result<RunStatusSummary, StoreError> {
     Ok(RunStatusSummary {
-        run_id: read_column(row, 0)?,
+        run_id: read_run_id(row, 0)?,
         contract_id: read_column(row, 1)?,
         status: read_column(row, 2)?,
         created_at: read_column(row, 3)?,
@@ -30,7 +30,7 @@ pub(super) fn gate_summary_from_row(row: &Row<'_>) -> Result<GateRunSummary, Sto
 
 pub(super) fn run_list_item_from_row(row: &Row<'_>) -> Result<RunListItem, StoreError> {
     Ok(RunListItem {
-        run_id: read_column(row, 0)?,
+        run_id: read_run_id(row, 0)?,
         contract_id: read_column(row, 1)?,
         status: read_column(row, 2)?,
         created_at: read_column(row, 3)?,
@@ -39,8 +39,8 @@ pub(super) fn run_list_item_from_row(row: &Row<'_>) -> Result<RunListItem, Store
 
 pub(super) fn attempt_summary_from_row(row: &Row<'_>) -> Result<AttemptSummary, StoreError> {
     Ok(AttemptSummary {
-        attempt_id: read_column(row, 0)?,
-        run_id: read_column(row, 1)?,
+        attempt_id: read_attempt_id(row, 0)?,
+        run_id: read_run_id(row, 1)?,
         attempt_number: read_column(row, 2)?,
         status: read_column(row, 3)?,
         created_at: read_column(row, 4)?,
@@ -52,8 +52,8 @@ pub(super) fn attempt_gate_detail_from_row(row: &Row<'_>) -> Result<AttemptGateD
     let stdout: Option<Vec<u8>> = read_column(row, 7)?;
     let stderr: Option<Vec<u8>> = read_column(row, 8)?;
     Ok(AttemptGateDetail {
-        gate_run_id: read_column(row, 0)?,
-        attempt_id: read_column(row, 1)?,
+        gate_run_id: read_gate_run_id(row, 0)?,
+        attempt_id: read_attempt_id(row, 1)?,
         gate_num: read_column(row, 2)?,
         passed: passed_int != 0,
         message: read_column(row, 4)?,
@@ -74,10 +74,10 @@ pub(super) fn evidence_bundle_summary_from_row(
     row: &Row<'_>,
 ) -> Result<EvidenceBundleSummary, StoreError> {
     Ok(EvidenceBundleSummary {
-        evidence_bundle_id: read_column(row, 0)?,
-        run_id: read_column(row, 1)?,
-        attempt_id: read_column(row, 2)?,
-        gate_run_id: read_column(row, 3)?,
+        evidence_bundle_id: read_evidence_bundle_id(row, 0)?,
+        run_id: read_run_id(row, 1)?,
+        attempt_id: read_optional_attempt_id(row, 2)?,
+        gate_run_id: read_optional_gate_run_id(row, 3)?,
         summary: read_column(row, 4)?,
         created_at: read_column(row, 5)?,
     })
@@ -86,6 +86,30 @@ pub(super) fn evidence_bundle_summary_from_row(
 fn read_column<T: rusqlite::types::FromSql>(row: &Row<'_>, index: usize) -> Result<T, StoreError> {
     row.get(index)
         .map_err(|source| StoreError::QueryFailed { source })
+}
+
+fn read_run_id(row: &Row<'_>, index: usize) -> Result<RunId, StoreError> {
+    read_column(row, index).map(RunId::new)
+}
+
+fn read_attempt_id(row: &Row<'_>, index: usize) -> Result<AttemptId, StoreError> {
+    read_column(row, index).map(AttemptId::new)
+}
+
+fn read_optional_attempt_id(row: &Row<'_>, index: usize) -> Result<Option<AttemptId>, StoreError> {
+    read_column::<Option<i64>>(row, index).map(|value| value.map(AttemptId::new))
+}
+
+fn read_gate_run_id(row: &Row<'_>, index: usize) -> Result<GateRunId, StoreError> {
+    read_column(row, index).map(GateRunId::new)
+}
+
+fn read_optional_gate_run_id(row: &Row<'_>, index: usize) -> Result<Option<GateRunId>, StoreError> {
+    read_column::<Option<i64>>(row, index).map(|value| value.map(GateRunId::new))
+}
+
+fn read_evidence_bundle_id(row: &Row<'_>, index: usize) -> Result<EvidenceBundleId, StoreError> {
+    read_column(row, index).map(EvidenceBundleId::new)
 }
 
 fn output_text(bytes: Option<&[u8]>) -> Option<String> {
