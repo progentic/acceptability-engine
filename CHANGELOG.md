@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.8] - 2026-06-03 - Sandbox Runner Environment
+
+### Added
+- **Sandbox Runner Policy** - Added a gate sandbox module that applies a minimal execution environment before process launch
+- **Environment Isolation Tests** - Added coverage for proxy stripping, offline cargo mode, noninteractive Git prompts, and sandbox home selection
+
+### Changed
+- **Gate Command Execution** - All timeout-managed gate commands now run with cleared inherited environment, explicit `PATH`, isolated `HOME`, `CARGO_NET_OFFLINE=true`, `CARGO_TERM_COLOR=never`, and `GIT_TERMINAL_PROMPT=0`
+
 ## [0.0.7] - 2026-06-03 - Supply Chain Gate
 
 ### Added

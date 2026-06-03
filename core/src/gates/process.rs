@@ -1,5 +1,6 @@
 use crate::error::process::ProcessError;
 use crate::gates::result::ExecutionResult;
+use crate::gates::sandbox::apply_sandbox_policy;
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -16,6 +17,7 @@ pub fn execute_with_timeout(
 ) -> Result<ExecutionResult, ProcessError> {
     let start_instant = Instant::now();
 
+    apply_sandbox_policy(&mut command);
     configure_process_group(&mut command);
 
     let mut child = command
@@ -127,6 +129,18 @@ mod tests {
     use super::*;
     use std::fs;
     use std::time::Duration;
+
+    #[test]
+    fn execute_with_timeout_uses_sandbox_environment() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c")
+            .arg("printf '%s:%s:%s' \"${HTTP_PROXY-unset}\" \"$CARGO_NET_OFFLINE\" \"$GIT_TERMINAL_PROMPT\"");
+        cmd.env("HTTP_PROXY", "http://proxy.example");
+
+        let result = execute_with_timeout(cmd, 99, "pass", "fail", Duration::from_secs(1)).unwrap();
+
+        assert_eq!(result.stdout, b"unset:true:0");
+    }
 
     #[test]
     fn test_process_timeout() {
