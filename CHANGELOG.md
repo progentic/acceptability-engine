@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.3] - 2026-06-03 - Orchestration Lock Boundary Refactor
+
+### Added
+- **Orchestrator Lifecycle Helpers** - Added explicit helpers for run record creation, run context construction, final decision derivation, and run finalization
+- **Orchestrator Unit Coverage** - Added tests for approval/rejection decision logic, store-independent run context construction, and persisted final status with gate evidence
+
+### Changed
+- **Run Contract Flow** - Refactored `run_contract` into a high-level lifecycle sequence so gate execution remains outside SQLite lock scopes
+- **Store Concurrency Documentation** - Updated the SQLite connection comment to describe per-operation locking instead of long-running gate lock retention
+
 ## [0.0.2] - 2026-06-03 - Contract Workspace Validation Hardening
 
 ### Added

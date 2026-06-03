@@ -31,8 +31,8 @@ pub struct RunListItem {
     pub created_at: i64,
 }
 
-// CONCURRENCY: Connection wrapped in Mutex. Long-running contracts hold lock
-// for duration. Layer 8 will migrate to sqlx::SqlitePool for concurrent reads.
+// CONCURRENCY: The orchestrator locks this connection only around individual
+// store operations. Layer 8 will migrate to sqlx::SqlitePool for pooled reads.
 pub fn open(database_url: &str) -> Result<Connection, StoreError> {
     let conn =
         Connection::open(database_url).map_err(|source| StoreError::ConnectionFailed { source })?;
