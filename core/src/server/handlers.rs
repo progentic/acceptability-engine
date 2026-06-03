@@ -7,6 +7,7 @@ use crate::store::{
     list_runs, update_run_status, with_connection, AttemptGateDetail, AttemptSummary,
     EvidenceBundleSummary, RunListItem,
 };
+use crate::workspace_mode::WorkspaceMode;
 use axum::{
     extract::{Path as AxumPath, Query, State},
     http::StatusCode,
@@ -36,6 +37,16 @@ fn default_limit() -> u32 {
 }
 
 fn resolve_runtime_workspace(
+    workspace_root: &Path,
+    workspace_mode: WorkspaceMode,
+    contract: &Contract,
+) -> Result<PathBuf, ValidationError> {
+    match workspace_mode {
+        WorkspaceMode::Local => resolve_local_runtime_workspace(workspace_root, contract),
+    }
+}
+
+fn resolve_local_runtime_workspace(
     workspace_root: &Path,
     contract: &Contract,
 ) -> Result<PathBuf, ValidationError> {
@@ -67,12 +78,14 @@ pub async fn submit_contract(
     }
 
     let runtime_workspace =
-        resolve_runtime_workspace(&state.workspace_root, &contract).map_err(|error| {
-            (
-                StatusCode::BAD_REQUEST,
-                format!("Runtime workspace validation failed: {}", error),
-            )
-        })?;
+        resolve_runtime_workspace(&state.workspace_root, state.workspace_mode, &contract).map_err(
+            |error| {
+                (
+                    StatusCode::BAD_REQUEST,
+                    format!("Runtime workspace validation failed: {}", error),
+                )
+            },
+        )?;
 
     let run_id = create_queued_run_record(&state, &contract).await?;
     enqueue_contract_run(&state, run_id, contract, runtime_workspace).await?;
@@ -150,7 +163,9 @@ mod tests {
     #[test]
     fn resolves_runtime_workspace_under_root() {
         let root = Path::new("/tmp/acceptability-workspaces");
-        let workspace = resolve_runtime_workspace(root, &contract_with_id("run-001")).unwrap();
+        let workspace =
+            resolve_runtime_workspace(root, WorkspaceMode::Local, &contract_with_id("run-001"))
+                .unwrap();
 
         assert_eq!(workspace, root.join("run-001"));
     }
@@ -158,7 +173,8 @@ mod tests {
     #[test]
     fn rejects_runtime_workspace_that_escapes_root() {
         let root = Path::new("/tmp/acceptability-workspaces");
-        let result = resolve_runtime_workspace(root, &contract_with_id("../escape"));
+        let result =
+            resolve_runtime_workspace(root, WorkspaceMode::Local, &contract_with_id("../escape"));
 
         assert!(matches!(result, Err(ValidationError::WorkspaceEscapesRoot)));
     }
@@ -269,6 +285,7 @@ mod tests {
             db,
             run_queue,
             workspace_root: PathBuf::from("/tmp/acceptability-workspaces").join(id),
+            workspace_mode: WorkspaceMode::Local,
         }
     }
 

@@ -76,6 +76,14 @@ The Acceptability Review Engine is an automated gatekeeper that checks software 
 
 This repository is Pre-Alpha software and is under active development. For a complete timeline of historical implementations, system refinements, and framework updates, please review the project (CHANGELOG)[CHANGELOG].
 
+## Workspace Mode
+
+The engine currently supports explicit local workspace materialization only.
+
+Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under the configured `--workspace` root. Each contract ID resolves to a single child directory under that root, and Gate 2 verifies that directory is a local Git work tree with the requested `base_sha`.
+
+`AH_WORKSPACE_MODE=git` is reserved for future clone/fetch materialization and fails during startup until that mode is implemented.
+
 ## License & Attribution
 
 Distributed under the MIT License.

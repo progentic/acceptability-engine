@@ -4,6 +4,7 @@ mod gates;
 mod orchestrator;
 mod server;
 mod store;
+mod workspace_mode;
 
 use clap::Parser;
 use contract::Contract;
@@ -35,6 +36,13 @@ struct Args {
 #[tokio::main]
 async fn main() {
     let args = Args::parse();
+    let workspace_mode = match workspace_mode::WorkspaceMode::from_env() {
+        Ok(mode) => mode,
+        Err(error) => {
+            eprintln!("PANIC: Invalid workspace mode configuration: {}", error);
+            std::process::exit(3);
+        }
+    };
 
     let raw_connection = match store::open(&args.database) {
         Ok(connection) => connection,
@@ -47,7 +55,7 @@ async fn main() {
     if let Some(listening_port) = args.port {
         let shared_db = store::shared_connection(raw_connection);
         if let Err(server_error) =
-            server::run_server(shared_db, args.workspace, listening_port).await
+            server::run_server(shared_db, args.workspace, workspace_mode, listening_port).await
         {
             eprintln!(
                 "PANIC: Network runtime engine bound crash: {}",
@@ -75,8 +83,9 @@ async fn main() {
     };
 
     println!(
-        "Orchestrator driving contract validation sequence for: {}",
-        contract_payload.id
+        "Orchestrator driving contract validation sequence for: {} in {} workspace mode",
+        contract_payload.id,
+        workspace_mode.as_str()
     );
 
     let shared_db = store::shared_connection(raw_connection);

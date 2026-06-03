@@ -24,4 +24,8 @@ pub enum ValidationError {
     InvalidScopePath { index: usize, value: String },
     #[error("workspace path escaped configured workspace root")]
     WorkspaceEscapesRoot,
+    #[error("AH_WORKSPACE_MODE has unsupported value: '{0}'")]
+    InvalidWorkspaceMode(String),
+    #[error("AH_WORKSPACE_MODE selected a mode that is not available: {0}")]
+    UnsupportedWorkspaceMode(String),
 }

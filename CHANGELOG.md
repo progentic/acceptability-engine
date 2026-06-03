@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.13] - 2026-06-03 - Explicit Workspace Mode
+
+### Added
+- **Workspace Mode Configuration** - Added `AH_WORKSPACE_MODE` parsing with explicit `local` workspace mode selection
+- **Workspace Mode Coverage** - Added tests for default local mode, explicit local mode, unsupported Git mode, and unknown mode values
+
+### Changed
+- **Runtime Startup Validation** - CLI and HTTP startup now fail fast when `AH_WORKSPACE_MODE` selects an unsupported or invalid workspace mode
+- **Server Workspace State** - Threaded workspace mode through HTTP state so contract submission resolves workspaces against the selected materialization mode
+- **Workspace Mode Documentation** - Documented `AH_WORKSPACE_MODE=local` behavior and the reserved `git` mode in the README
+
 ## [0.0.12] - 2026-06-03 - Evidence Read API
 
 ### Added

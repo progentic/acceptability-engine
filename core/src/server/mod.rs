@@ -3,6 +3,7 @@ pub mod state;
 pub mod worker;
 
 use crate::store::SharedConnection;
+use crate::workspace_mode::WorkspaceMode;
 use axum::{
     routing::{get, post},
     Router,
@@ -15,6 +16,7 @@ use worker::{run_queue, spawn_run_worker};
 pub async fn run_server(
     db: SharedConnection,
     workspace_root: PathBuf,
+    workspace_mode: WorkspaceMode,
     port: u16,
 ) -> Result<(), std::io::Error> {
     let (sender, receiver) = run_queue();
@@ -23,6 +25,7 @@ pub async fn run_server(
         db,
         run_queue: sender,
         workspace_root,
+        workspace_mode,
     };
 
     let app = Router::new()
@@ -49,8 +52,9 @@ pub async fn run_server(
     let tcp_listener = tokio::net::TcpListener::bind(&target_address).await?;
 
     println!(
-        "HTTP Network Control Plane online at http://{}",
-        target_address
+        "HTTP Network Control Plane online at http://{} in {} workspace mode",
+        target_address,
+        workspace_mode.as_str()
     );
     supervise_server(tcp_listener, app, worker).await
 }
