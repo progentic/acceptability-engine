@@ -1,10 +1,10 @@
-use crate::store::Connection;
+use super::worker::RunQueueSender;
+use crate::orchestrator::SharedConnection;
 use std::path::PathBuf;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: Arc<Mutex<Connection>>,
+    pub db: SharedConnection,
+    pub run_queue: RunQueueSender,
     pub workspace_root: PathBuf,
 }

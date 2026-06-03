@@ -18,6 +18,16 @@ pub async fn run_contract(
     workspace: PathBuf,
 ) -> Result<FinalDecision, OrchestratorError> {
     let run_id = create_run_record(&db, &contract).await?;
+    execute_existing_run(db, run_id, contract, workspace).await
+}
+
+pub async fn execute_existing_run(
+    db: SharedConnection,
+    run_id: i64,
+    contract: Contract,
+    workspace: PathBuf,
+) -> Result<FinalDecision, OrchestratorError> {
+    mark_run_running(&db, run_id).await?;
     let run_context = build_run_context(contract, workspace);
     let gate_outputs = run_gates_sequential(&run_context).await?;
     let final_decision = decide_from_gate_outputs(&gate_outputs);
@@ -33,6 +43,11 @@ async fn create_run_record(
 ) -> Result<i64, OrchestratorError> {
     let conn = db.lock().await;
     Ok(create_run(&conn, contract)?)
+}
+
+async fn mark_run_running(db: &SharedConnection, run_id: i64) -> Result<(), OrchestratorError> {
+    let conn = db.lock().await;
+    Ok(update_run_status(&conn, run_id, "RUNNING")?)
 }
 
 fn build_run_context(contract: Contract, workspace: PathBuf) -> Run {
@@ -78,7 +93,7 @@ async fn finalize_run_record(
 mod tests {
     use super::*;
     use crate::gates::result::{GateOutput, GateResult};
-    use crate::store::{fetch_run_summary, open};
+    use crate::store::{create_queued_run, fetch_run_summary, open};
     use std::path::PathBuf;
 
     fn valid_contract() -> Contract {
@@ -144,5 +159,21 @@ mod tests {
         let summary = fetch_run_summary(&conn, run_id).unwrap().unwrap();
         assert_eq!(summary.status, "REJECTED");
         assert_eq!(summary.gates.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn marks_queued_run_running_before_execution() {
+        let db = Arc::new(Mutex::new(open(":memory:").unwrap()));
+        let contract = valid_contract();
+        let run_id = {
+            let conn = db.lock().await;
+            create_queued_run(&conn, &contract).unwrap()
+        };
+
+        mark_run_running(&db, run_id).await.unwrap();
+
+        let conn = db.lock().await;
+        let summary = fetch_run_summary(&conn, run_id).unwrap().unwrap();
+        assert_eq!(summary.status, "RUNNING");
     }
 }

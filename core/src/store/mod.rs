@@ -41,6 +41,18 @@ pub fn open(database_url: &str) -> Result<Connection, StoreError> {
 }
 
 pub fn create_run(conn: &Connection, contract: &Contract) -> Result<i64, StoreError> {
+    create_run_with_status(conn, contract, "RUNNING")
+}
+
+pub fn create_queued_run(conn: &Connection, contract: &Contract) -> Result<i64, StoreError> {
+    create_run_with_status(conn, contract, "QUEUED")
+}
+
+fn create_run_with_status(
+    conn: &Connection,
+    contract: &Contract,
+    status: &str,
+) -> Result<i64, StoreError> {
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_err(|_| StoreError::MigrationFailed {
@@ -56,7 +68,7 @@ pub fn create_run(conn: &Connection, contract: &Contract) -> Result<i64, StoreEr
 
     conn.execute(
         "INSERT INTO runs (contract_id, status, created_at) VALUES (?1, ?2, ?3)",
-        rusqlite::params![contract.id, "RUNNING", now],
+        rusqlite::params![contract.id, status, now],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
 
@@ -363,5 +375,22 @@ mod tests {
 
         let invalid = list_runs(&conn, None, 0, 0);
         assert!(matches!(invalid, Err(StoreError::InvalidParameter(_))));
+    }
+
+    #[tokio::test]
+    async fn test_create_queued_run_status() {
+        let conn = open(":memory:").unwrap();
+        let contract = Contract {
+            id: "test-queued".to_string(),
+            repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
+            base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            scopes: vec!["src".to_string()],
+            requires_human_review: false,
+        };
+
+        let run_id = create_queued_run(&conn, &contract).unwrap();
+        let summary = fetch_run_summary(&conn, run_id).unwrap().unwrap();
+
+        assert_eq!(summary.status, "QUEUED");
     }
 }

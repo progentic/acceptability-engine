@@ -5,6 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.5] - 2026-06-03 - Local Workspace Mode Lock
+
+### Added
+- **Local Workspace Verification** - Gate 2 now requires the runtime workspace to already exist as a directory
+- **Git Repository Verification** - Gate 2 validates that the workspace is a Git work tree and that `base_sha` resolves to a commit
+- **Workspace Validation Tests** - Added tests for missing and non-directory local workspaces
+
+### Changed
+- **Workspace Mode Semantics** - Locked the engine into explicit local-workspace mode instead of creating empty workspace directories
+- **Gate 2 Success Message** - Updated the workspace gate result to describe local Git workspace verification
+
+## [0.0.4] - 2026-06-03 - Async Run Queue Worker
+
+### Added
+- **Run Queue** - Added a bounded Tokio run queue for HTTP-submitted contracts
+- **Background Worker** - Added a server worker that consumes queued runs, marks them `RUNNING`, executes gates, and finalizes evidence/status asynchronously
+- **Queued Run Status** - Added `QUEUED` run creation support and tests for queued run persistence
+
+### Changed
+- **HTTP Submit Semantics** - Changed `POST /runs` to return `202 Accepted` with `run_id` and `QUEUED` status instead of executing gates inside the request lifecycle
+- **Worker Failure Handling** - Marks queued work `FAILED_INTERNAL` when execution or queue handoff fails
+
 ## [0.0.3] - 2026-06-03 - Orchestration Lock Boundary Refactor
 
 ### Added

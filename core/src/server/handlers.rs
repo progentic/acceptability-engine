@@ -1,9 +1,10 @@
 use super::state::AppState;
+use super::worker::RunWork;
 use crate::contract::Contract;
 use crate::error::{StoreError, ValidationError};
-use crate::orchestrator::run_contract;
-use crate::orchestrator::state_machine::FinalDecision;
-use crate::store::{fetch_run_summary, list_runs, RunListItem};
+use crate::store::{
+    create_queued_run, fetch_run_summary, list_runs, update_run_status, RunListItem,
+};
 use axum::{
     extract::{Path as AxumPath, Query, State},
     http::StatusCode,
@@ -14,6 +15,7 @@ use std::path::{Component, Path, PathBuf};
 
 #[derive(Serialize)]
 pub struct SubmitResponse {
+    pub run_id: i64,
     pub status: String,
     pub reason: Option<String>,
 }
@@ -54,7 +56,7 @@ fn is_single_workspace_segment(id: &str) -> bool {
 pub async fn submit_contract(
     State(state): State<AppState>,
     Json(contract): Json<Contract>,
-) -> Result<Json<SubmitResponse>, (StatusCode, String)> {
+) -> Result<(StatusCode, Json<SubmitResponse>), (StatusCode, String)> {
     if let Err(validation_error) = contract.validate() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -70,23 +72,58 @@ pub async fn submit_contract(
             )
         })?;
 
-    match run_contract(state.db.clone(), contract, runtime_workspace).await {
-        Ok(FinalDecision::Approve) => Ok(Json(SubmitResponse {
-            status: "APPROVED".to_string(),
+    let run_id = create_queued_run_record(&state, &contract).await?;
+    enqueue_contract_run(&state, run_id, contract, runtime_workspace).await?;
+
+    Ok((
+        StatusCode::ACCEPTED,
+        Json(SubmitResponse {
+            run_id,
+            status: "QUEUED".to_string(),
             reason: None,
-        })),
-        Ok(FinalDecision::Reject { reason }) => Ok(Json(SubmitResponse {
-            status: "REJECTED".to_string(),
-            reason: Some(reason),
-        })),
-        Err(orchestration_error) => Err((
+        }),
+    ))
+}
+
+async fn create_queued_run_record(
+    state: &AppState,
+    contract: &Contract,
+) -> Result<i64, (StatusCode, String)> {
+    let database_guard = state.db.lock().await;
+    create_queued_run(&database_guard, contract).map_err(|store_error| {
+        (
             StatusCode::INTERNAL_SERVER_ERROR,
-            format!(
-                "Internal engine pipeline execution failure: {}",
-                orchestration_error
-            ),
-        )),
+            format!("Failed to create queued run record: {}", store_error),
+        )
+    })
+}
+
+async fn enqueue_contract_run(
+    state: &AppState,
+    run_id: i64,
+    contract: Contract,
+    workspace: PathBuf,
+) -> Result<(), (StatusCode, String)> {
+    let work = RunWork {
+        run_id,
+        contract,
+        workspace,
+    };
+
+    if state.run_queue.try_send(work).is_ok() {
+        return Ok(());
     }
+
+    mark_queued_run_failed(state, run_id).await;
+    Err((
+        StatusCode::SERVICE_UNAVAILABLE,
+        "Run queue is unavailable".to_string(),
+    ))
+}
+
+async fn mark_queued_run_failed(state: &AppState, run_id: i64) {
+    let database_guard = state.db.lock().await;
+    let _ = update_run_status(&database_guard, run_id, "FAILED_INTERNAL");
 }
 
 #[cfg(test)]

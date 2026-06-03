@@ -9,7 +9,6 @@ use clap::Parser;
 use contract::Contract;
 use error::ContractLoadError;
 use orchestrator::state_machine::FinalDecision;
-use server::state::AppState;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Mutex;
@@ -49,12 +48,9 @@ async fn main() {
 
     if let Some(listening_port) = args.port {
         let shared_db = Arc::new(Mutex::new(raw_connection));
-        let server_state = AppState {
-            db: shared_db,
-            workspace_root: args.workspace,
-        };
-
-        if let Err(server_error) = server::run_server(server_state, listening_port).await {
+        if let Err(server_error) =
+            server::run_server(shared_db, args.workspace, listening_port).await
+        {
             eprintln!(
                 "PANIC: Network runtime engine bound crash: {}",
                 server_error
