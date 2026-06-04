@@ -89,8 +89,16 @@ jobs:
       - name: Validate Compose config
         run: docker compose config
 
-      - name: Install kubectl
-        uses: azure/setup-kubectl@v4
-
       - name: Validate Kubernetes manifest shape
-        run: kubectl apply --dry-run=client --validate=false --filename deploy/kubernetes.yaml
+        run: |
+          ruby -e '
+            require "yaml"
+            docs = YAML.load_stream(File.read("deploy/kubernetes.yaml")).compact
+            abort("deploy/kubernetes.yaml has no documents") if docs.empty?
+            docs.each_with_index do |doc, index|
+              abort("document #{index + 1} missing apiVersion") unless doc["apiVersion"]
+              abort("document #{index + 1} missing kind") unless doc["kind"]
+              metadata = doc["metadata"] || {}
+              abort("document #{index + 1} missing metadata.name") unless metadata["name"]
+            end
+          '

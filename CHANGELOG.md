@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Docker Build Controls** - Docker builds now accept `CARGO_BUILD_JOBS` and disable incremental compilation to make runtime image builds more predictable on ephemeral CI runners
+- **Offline Manifest Validation** - Kubernetes CI validation now parses manifest shape without contacting a cluster or relying on `kubectl` API discovery
 
 ## [0.0.21] - 2026-06-04 - Deployment Foundation
 
