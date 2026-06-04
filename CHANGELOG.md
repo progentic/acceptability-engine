@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.28] - 2026-06-04 - Artifact Retention
+
+### Added
+- **Artifact Retention CLI** - Added `--retention-days` and `--retention-dry-run` for explicit filesystem artifact lifecycle management
+- **Retention Audit Evidence** - Added retention audit events for dry-run, planned, deleted, and missing artifact outcomes
+- **Artifact Delete Safety** - Added artifact URI validation, traversal rejection, backslash rejection, and symlink root/parent checks before planning or deleting artifact files
+- **Phase 27 Lifecycle Report** - Added `docs/reviews/PHASE27_ARTIFACT_RETENTION.md` with retention policy, cleanup workflow, audit record, validation, and deviation sections
+- **Retention Coverage** - Added tests for dry-run behavior, artifact deletion, missing artifact audits, cutoff filtering, evidence descriptor preservation, and URI traversal rejection
+
+### Changed
+- **Evidence Lifecycle Documentation** - Updated architecture, invariants, deployment, and phase map records to document audited artifact retention while preserving SQLite evidence descriptors
+
 ## [0.0.27] - 2026-06-04 - Multi-Tenant Hardening
 
 ### Added

@@ -22,6 +22,15 @@ docker compose up --build
 
 The container stores SQLite data in `/data`, evidence artifacts in `/artifacts`, and materialized workspaces in `/workspaces`.
 
+Run artifact retention from the engine CLI against the same database and artifact root:
+
+```bash
+accessibility-engine --workspace /workspaces --database /data/evidence.db --artifact-root /artifacts --retention-days 90 --retention-dry-run
+accessibility-engine --workspace /workspaces --database /data/evidence.db --artifact-root /artifacts --retention-days 90
+```
+
+Retention deletes only filesystem artifact bytes. SQLite evidence descriptors remain durable, and every planned, deleted, dry-run, or missing artifact outcome is recorded in `audit_events`.
+
 ## Kubernetes
 
 Apply the deployment manifest:

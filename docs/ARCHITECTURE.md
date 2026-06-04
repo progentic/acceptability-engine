@@ -151,6 +151,8 @@ Human-review evidence links to the review decision that produced it.
 
 Gate telemetry artifacts are written to the artifact store before SQLite finalization. SQLite finalization then records gate rows, evidence descriptors, attempt status, run status, and final decision in one transaction.
 
+Artifact retention is an operator CLI workflow. It may remove filesystem artifact bytes after writing audit evidence, but it must not delete or mutate SQLite evidence descriptors.
+
 ## Workspace model
 
 The supported workspace modes are local and Git.

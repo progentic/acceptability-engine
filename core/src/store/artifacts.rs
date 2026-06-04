@@ -1,7 +1,7 @@
 use super::types::{AttemptId, GateRunId, RunId};
 use crate::error::StoreError;
 use sha2::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -47,6 +47,33 @@ impl ArtifactStore {
         write_bytes(&absolute_path, input.bytes)?;
         Ok(stored_descriptor(input, relative_path, sha256))
     }
+
+    pub fn delete_artifact(&self, storage_uri: &str) -> Result<ArtifactDeleteOutcome, StoreError> {
+        let absolute_path = self.checked_artifact_path(storage_uri)?;
+        remove_artifact_file(&absolute_path)
+    }
+
+    pub fn validate_artifact_uri(&self, storage_uri: &str) -> Result<(), StoreError> {
+        self.checked_artifact_path(storage_uri).map(|_| ())
+    }
+
+    #[cfg(test)]
+    pub fn root_for_tests(&self) -> &Path {
+        self.root.as_ref()
+    }
+
+    fn checked_artifact_path(&self, storage_uri: &str) -> Result<PathBuf, StoreError> {
+        let relative_path = artifact_relative_path_from_uri(storage_uri)?;
+        let absolute_path = self.root.join(relative_path);
+        reject_symlinked_parent(&self.root, &absolute_path)?;
+        Ok(absolute_path)
+    }
+}
+
+#[derive(Debug, PartialEq, Eq)]
+pub enum ArtifactDeleteOutcome {
+    Deleted,
+    Missing,
 }
 
 fn stored_descriptor(
@@ -110,6 +137,67 @@ fn artifact_uri(relative_path: &Path) -> String {
     )
 }
 
+fn artifact_relative_path_from_uri(storage_uri: &str) -> Result<PathBuf, StoreError> {
+    let Some(relative) = storage_uri.strip_prefix("artifact://") else {
+        return Err(StoreError::InvalidArtifactUri(storage_uri.to_string()));
+    };
+    let path = Path::new(relative);
+    if relative.is_empty() {
+        return Err(StoreError::InvalidArtifactUri(storage_uri.to_string()));
+    }
+    if relative.contains('\\') {
+        return Err(StoreError::InvalidArtifactUri(storage_uri.to_string()));
+    }
+    if path.components().all(safe_relative_component) {
+        return Ok(path.to_path_buf());
+    }
+    Err(StoreError::InvalidArtifactUri(storage_uri.to_string()))
+}
+
+fn safe_relative_component(component: Component<'_>) -> bool {
+    matches!(component, Component::Normal(_))
+}
+
+fn reject_symlinked_parent(root: &Path, artifact_path: &Path) -> Result<(), StoreError> {
+    reject_symlink_component(root)?;
+    let Some(parent) = artifact_path.parent() else {
+        return Ok(());
+    };
+    let relative_parent = parent.strip_prefix(root).map_err(|_| {
+        StoreError::InvalidArtifactUri(artifact_path.to_string_lossy().into_owned())
+    })?;
+    let mut current = root.to_path_buf();
+    for component in relative_parent.components() {
+        current.push(component.as_os_str());
+        reject_symlink_component(&current)?;
+    }
+    Ok(())
+}
+
+fn reject_symlink_component(path: &Path) -> Result<(), StoreError> {
+    if !path.exists() {
+        return Ok(());
+    }
+    let metadata = std::fs::symlink_metadata(path)
+        .map_err(|source| StoreError::ArtifactDeleteFailed { source })?;
+    if !metadata.file_type().is_symlink() {
+        return Ok(());
+    }
+    Err(StoreError::InvalidArtifactUri(
+        path.to_string_lossy().into_owned(),
+    ))
+}
+
+fn remove_artifact_file(path: &Path) -> Result<ArtifactDeleteOutcome, StoreError> {
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(ArtifactDeleteOutcome::Deleted),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            Ok(ArtifactDeleteOutcome::Missing)
+        }
+        Err(source) => Err(StoreError::ArtifactDeleteFailed { source }),
+    }
+}
+
 fn sha256_hex(bytes: &[u8]) -> String {
     let digest = Sha256::digest(bytes);
     digest.iter().map(|byte| format!("{byte:02x}")).collect()
@@ -157,6 +245,102 @@ mod tests {
         assert_eq!(descriptor.content_type, "application/json");
         assert!(descriptor.storage_uri.starts_with("artifact://runs/7/"));
         assert!(artifact_file_exists(&root, &descriptor.storage_uri));
+    }
+
+    #[test]
+    fn deletes_artifact_file_under_root() {
+        let root = test_root("delete");
+        let store = ArtifactStore::new(root.clone());
+        let descriptor = store
+            .write_artifact(ArtifactInput {
+                run_id: RunId::new(7),
+                attempt_id: None,
+                gate_run_id: None,
+                kind: "retention",
+                label: "retained",
+                content_type: "text/plain",
+                summary: "retention test",
+                bytes: b"delete-me",
+            })
+            .unwrap();
+
+        let outcome = store.delete_artifact(&descriptor.storage_uri).unwrap();
+
+        assert_eq!(outcome, ArtifactDeleteOutcome::Deleted);
+        assert!(!artifact_file_exists(&root, &descriptor.storage_uri));
+    }
+
+    #[test]
+    fn rejects_artifact_uri_traversal() {
+        let root = test_root("traversal");
+        let store = ArtifactStore::new(root);
+        let result = store.delete_artifact("artifact://../escape");
+
+        assert!(matches!(result, Err(StoreError::InvalidArtifactUri(_))));
+    }
+
+    #[test]
+    fn rejects_artifact_uri_backslashes() {
+        let root = test_root("backslash");
+        let store = ArtifactStore::new(root);
+        let result = store.delete_artifact("artifact://runs\\7\\artifact.bin");
+
+        assert!(matches!(result, Err(StoreError::InvalidArtifactUri(_))));
+    }
+
+    #[test]
+    fn validates_artifact_uri_without_deleting_file() {
+        let root = test_root("validate");
+        let store = ArtifactStore::new(root.clone());
+        let descriptor = store
+            .write_artifact(ArtifactInput {
+                run_id: RunId::new(7),
+                attempt_id: None,
+                gate_run_id: None,
+                kind: "retention",
+                label: "retained",
+                content_type: "text/plain",
+                summary: "retention test",
+                bytes: b"validate-me",
+            })
+            .unwrap();
+
+        store
+            .validate_artifact_uri(&descriptor.storage_uri)
+            .unwrap();
+
+        assert!(artifact_file_exists(&root, &descriptor.storage_uri));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_artifact_root() {
+        let target_root = test_root("symlink-target");
+        let symlink_root = test_root("symlink-root");
+        std::fs::create_dir_all(&target_root).unwrap();
+        std::fs::create_dir_all(symlink_root.parent().unwrap()).unwrap();
+        std::os::unix::fs::symlink(&target_root, &symlink_root).unwrap();
+        let store = ArtifactStore::new(symlink_root);
+
+        let result = store.delete_artifact("artifact://runs/7/artifact.bin");
+
+        assert!(matches!(result, Err(StoreError::InvalidArtifactUri(_))));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rejects_symlink_artifact_parent() {
+        let root = test_root("symlink-parent-root");
+        let target = test_root("symlink-parent-target");
+        let runs_dir = root.join("runs");
+        std::fs::create_dir_all(&runs_dir).unwrap();
+        std::fs::create_dir_all(&target).unwrap();
+        std::os::unix::fs::symlink(&target, runs_dir.join("7")).unwrap();
+        let store = ArtifactStore::new(root);
+
+        let result = store.delete_artifact("artifact://runs/7/artifact.bin");
+
+        assert!(matches!(result, Err(StoreError::InvalidArtifactUri(_))));
     }
 
     fn artifact_file_exists(root: &Path, storage_uri: &str) -> bool {

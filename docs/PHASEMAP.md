@@ -406,30 +406,34 @@ Steps
 
 Acceptance Evidence
 
-* retention tests
-* cleanup tests
-* audit records
-* artifact lifecycle report
+* Retention tests cover dry-run planning, cutoff filtering, and newer artifact preservation.
+* Cleanup tests cover filesystem deletion, missing-file handling, traversal rejection, symlink rejection, and immutable evidence descriptors.
+* Audit records are written for dry-run, planned, deleted, and missing retention outcomes.
+* `docs/reviews/PHASE27_ARTIFACT_RETENTION.md` contains the artifact lifecycle report.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents artifact retention as a CLI workflow that preserves SQLite evidence descriptors.
+* `INVARIANTS.md` requires artifact retention to be explicit, audited, and descriptor-preserving.
+* `DEPLOYMENT.md` documents dry-run and deletion retention commands.
+* `CHANGELOG.md` records version `0.0.28 - Artifact Retention`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Evidence lifecycle becomes manageable.
+Evidence lifecycle is manageable through explicit, audited artifact retention.
 
 Notes / Deviations
+
+* `D27-001` is an accepted limitation: retention is a CLI workflow, not an HTTP API.
+* `D27-002` is an accepted limitation: SQLite descriptors remain after artifact bytes are deleted.
 
 ========================
 PHASE 28 REPLAY ENGINE

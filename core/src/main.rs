@@ -35,6 +35,14 @@ struct Args {
     #[arg(long, default_value = "artifacts")]
     artifact_root: PathBuf,
 
+    /// Delete artifact files older than this many days and keep SQLite evidence descriptors
+    #[arg(long)]
+    retention_days: Option<u32>,
+
+    /// Report retention candidates without deleting artifact files
+    #[arg(long)]
+    retention_dry_run: bool,
+
     /// Bind and run as an HTTP web service on specified network port
     #[arg(short, long)]
     port: Option<u16>,
@@ -63,6 +71,34 @@ async fn main() {
             std::process::exit(3);
         }
     };
+
+    if let Some(retention_days) = args.retention_days {
+        let artifact_store = store::ArtifactStore::new(args.artifact_root);
+        match run_artifact_retention(
+            shared_db,
+            artifact_store,
+            retention_days,
+            args.retention_dry_run,
+        )
+        .await
+        {
+            Ok(summary) => {
+                println!(
+                    "RETENTION: scanned={} eligible={} planned={} deleted={} missing={}",
+                    summary.scanned,
+                    summary.eligible,
+                    summary.planned,
+                    summary.deleted,
+                    summary.missing
+                );
+                std::process::exit(0);
+            }
+            Err(error) => {
+                eprintln!("PANIC: Artifact retention failed: {}", error);
+                std::process::exit(3);
+            }
+        }
+    }
 
     if let Some(listening_port) = args.port {
         if let Err(server_error) = server::run_server(
@@ -141,6 +177,36 @@ async fn main() {
             std::process::exit(3);
         }
     }
+}
+
+async fn run_artifact_retention(
+    db: store::SharedConnection,
+    artifact_store: store::ArtifactStore,
+    retention_days: u32,
+    dry_run: bool,
+) -> Result<store::RetentionSummary, error::StoreError> {
+    let cutoff_unix_seconds = retention_cutoff(retention_days)?;
+    store::with_connection(db, move |conn| {
+        store::apply_artifact_retention(
+            conn,
+            &artifact_store,
+            store::RetentionPolicy {
+                cutoff_unix_seconds,
+                dry_run,
+            },
+        )
+    })
+    .await
+}
+
+fn retention_cutoff(retention_days: u32) -> Result<i64, error::StoreError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| {
+            error::StoreError::InvalidParameter("system clock is before UNIX epoch".to_string())
+        })?;
+    let retention_seconds = i64::from(retention_days) * 86_400;
+    Ok(now.as_secs() as i64 - retention_seconds)
 }
 
 fn setup_tracing() {

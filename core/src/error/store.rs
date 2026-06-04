@@ -36,4 +36,11 @@ pub enum StoreError {
         #[source]
         source: std::io::Error,
     },
+    #[error("failed to delete evidence artifact: {source}")]
+    ArtifactDeleteFailed {
+        #[source]
+        source: std::io::Error,
+    },
+    #[error("invalid artifact storage URI: {0}")]
+    InvalidArtifactUri(String),
 }

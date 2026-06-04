@@ -156,6 +156,8 @@ Evidence linked to a gate must identify the run, attempt, and gate run when thos
 
 Evidence linked to a human review decision must identify the run and review decision.
 
+Artifact retention may delete filesystem artifact bytes only through an explicit audited workflow. Retention must not delete or mutate SQLite evidence descriptors.
+
 ## 13. SQLite finalization must be transactional
 
 For normal gate completion, the following writes must finalize together:

@@ -1,3 +1,4 @@
+mod artifact_retention;
 mod artifacts;
 mod attempt_reads;
 mod audit;
@@ -16,6 +17,7 @@ mod schema;
 mod transaction;
 mod types;
 
+pub use artifact_retention::{apply_artifact_retention, RetentionPolicy, RetentionSummary};
 pub use artifacts::{ArtifactInput, ArtifactStore, StoredArtifactDescriptor};
 #[cfg(test)]
 pub use attempt_reads::{list_attempt_gates, list_run_attempts};
