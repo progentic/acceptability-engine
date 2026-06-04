@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.27] - 2026-06-04 - Multi-Tenant Hardening
+
+### Added
+- **Phase 26 Tenant Evidence** - Added `docs/reviews/PHASE26_TENANT_HARDENING.md` with query review, boundary validation, tenant isolation test, authorization test, and deviation sections
+- **Cross-Tenant Denial Audit** - Added denied audit events for authenticated hidden-resource run, attempt, evidence, progress, and review access attempts
+- **Tenant Isolation Coverage** - Added HTTP negative-path tests for cross-tenant run status, attempt gates, evidence, and review attempts
+
+### Changed
+- **Tenant Boundary Documentation** - Updated architecture, invariants, and phase map records for opaque cross-tenant responses and durable denial evidence
+
 ## [0.0.26] - 2026-06-04 - Architecture Review I
 
 ### Added

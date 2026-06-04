@@ -352,30 +352,33 @@ Steps
 
 Acceptance Evidence
 
-* tenant isolation tests
-* authorization tests
-* query review report
-* boundary validation report
+* `docs/reviews/PHASE26_TENANT_HARDENING.md` contains the query review report.
+* `docs/reviews/PHASE26_TENANT_HARDENING.md` contains the boundary validation report.
+* Tenant isolation tests cover cross-tenant run status, attempt gates, evidence, review attempts, progress access, run lists, and run summaries.
+* Authorization tests cover API-key requirements, role denial, repository policy denial, reviewer authority, and submitter review denial.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents opaque cross-tenant responses and denied audit evidence.
+* `INVARIANTS.md` requires opaque cross-tenant access and denied audit evidence.
+* `CHANGELOG.md` records version `0.0.27 - Multi-Tenant Hardening`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Tenant boundaries formally enforced.
+Tenant boundaries are formally enforced and cross-tenant resource attempts produce denied audit evidence.
 
 Notes / Deviations
+
+* `D26-001` is an accepted limitation: tenant federation and shared visibility remain out of scope.
+* `D26-002` is an accepted limitation: missing and hidden resources both return `404` to preserve tenant privacy.
 
 ============================
 PHASE 27 ARTIFACT RETENTION

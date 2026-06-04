@@ -63,6 +63,8 @@ The role controls read, submit, and review authority. The tenant scopes run and 
 
 Security denials are recorded as audit events. Accepted reads, submissions, and review decisions are also audited.
 
+Authenticated attempts to read or review resources outside the caller tenant return an opaque not-found response. The server records a denied audit event with the caller identity and does not reveal whether the target exists for another tenant.
+
 ### 3. Run queue and worker
 
 The HTTP server owns a bounded run queue. A submitted contract is converted into queued work and sent to the worker. The worker marks the run running, creates an attempt, executes the gates, and finalizes the run.

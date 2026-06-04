@@ -176,6 +176,8 @@ Tenant-scoped helpers must be used for public HTTP paths.
 
 A caller from one tenant must not be able to read runs, attempts, gates, evidence, or audit-derived state from another tenant.
 
+Authenticated cross-tenant resource access must stay opaque to the caller and must be recorded as a denied audit event when the server has enough caller context.
+
 ## 15. Repository policy applies before submission
 
 A submitter may submit only contracts whose repository URL matches the caller identity policy.

@@ -1,5 +1,6 @@
 use super::security::{SecurityIdentity, SecurityRejection};
 use super::state::AppState;
+use crate::error::StoreError;
 use crate::progress::RunProgressEvent;
 use crate::store::{
     fetch_run_summary_for_tenant, record_audit_event, with_connection, AuditEvent, RunId,
@@ -16,6 +17,7 @@ use serde::Deserialize;
 use tokio::sync::broadcast;
 
 const PROGRESS_READ_ACTION: &str = "runs.progress.read";
+const RESOURCE_NOT_VISIBLE_REASON: &str = "resource not found or not visible";
 
 #[derive(Deserialize)]
 pub struct ProgressQuery {
@@ -123,10 +125,13 @@ async fn ensure_progress_run_exists(
     .await
     {
         Ok(Some(_)) => Ok(()),
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            format!("Run record not found for ID '{}'", run_id.get()),
-        )),
+        Ok(None) => {
+            audit_progress_not_visible(state, identity, run_id).await;
+            Err((
+                StatusCode::NOT_FOUND,
+                format!("Run record not found for ID '{}'", run_id.get()),
+            ))
+        }
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to query progress run: {store_error}"),
@@ -171,6 +176,42 @@ async fn audit_progress_read(state: &AppState, identity: &SecurityIdentity, run_
         },
     )
     .await;
+}
+
+async fn audit_progress_not_visible(state: &AppState, identity: &SecurityIdentity, run_id: RunId) {
+    if !hidden_progress_run_exists(state, run_id).await {
+        return;
+    }
+    write_progress_audit(
+        state,
+        AuditEvent {
+            tenant_id: identity.tenant_id.clone(),
+            actor: identity.actor.clone(),
+            role: identity.role.as_str().to_string(),
+            action: PROGRESS_READ_ACTION.to_string(),
+            resource_type: "run".to_string(),
+            resource_id: Some(run_id.get().to_string()),
+            outcome: "DENIED".to_string(),
+            reason: Some(RESOURCE_NOT_VISIBLE_REASON.to_string()),
+        },
+    )
+    .await;
+}
+
+async fn hidden_progress_run_exists(state: &AppState, run_id: RunId) -> bool {
+    with_connection(state.db.clone(), move |conn| run_exists(conn, run_id))
+        .await
+        .unwrap_or(false)
+}
+
+fn run_exists(conn: &rusqlite::Connection, run_id: RunId) -> Result<bool, StoreError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM runs WHERE id = ?1)",
+        rusqlite::params![run_id.get()],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|value| value == 1)
+    .map_err(|source| StoreError::QueryFailed { source })
 }
 
 async fn write_progress_audit(state: &AppState, event: AuditEvent) {
@@ -234,6 +275,53 @@ mod tests {
         server.abort();
     }
 
+    #[tokio::test]
+    async fn cross_tenant_progress_is_hidden_and_audited() {
+        let state = test_state_with_trust(
+            "progress-tenant",
+            TrustControls::api_key("secret|viewer|tenant-b|*"),
+        );
+        let run_id = create_test_run_for_tenant(&state, "tenant-a").await;
+        let identity = state
+            .trust
+            .authorize_read(&auth_headers("secret"))
+            .await
+            .unwrap();
+
+        let error = ensure_progress_run_exists(&state, &identity, run_id)
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            audit_outcome_count(&state, PROGRESS_READ_ACTION, "DENIED").await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_progress_run_is_not_hidden_resource_denial() {
+        let state = test_state_with_trust(
+            "progress-missing",
+            TrustControls::api_key("secret|viewer|tenant-a|*"),
+        );
+        let identity = state
+            .trust
+            .authorize_read(&auth_headers("secret"))
+            .await
+            .unwrap();
+
+        let error = ensure_progress_run_exists(&state, &identity, RunId::new(999))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            audit_outcome_count(&state, PROGRESS_READ_ACTION, "DENIED").await,
+            0
+        );
+    }
+
     fn progress_value_from_message(
         message: tokio_tungstenite::tungstenite::Message,
     ) -> serde_json::Value {
@@ -251,6 +339,10 @@ mod tests {
     }
 
     fn test_state(id: &str) -> AppState {
+        test_state_with_trust(id, TrustControls::disabled())
+    }
+
+    fn test_state_with_trust(id: &str, trust: TrustControls) -> AppState {
         let conn = open(":memory:").unwrap();
         let db = shared_connection(conn);
         let (run_queue, _receiver) = run_queue();
@@ -259,18 +351,44 @@ mod tests {
             run_queue,
             workspace_root: PathBuf::from("/tmp/acceptability-workspaces").join(id),
             workspace_mode: WorkspaceMode::Local,
-            trust: TrustControls::disabled(),
+            trust,
             telemetry: MetricsState::new(),
             progress: ProgressHub::new(),
         }
     }
 
     async fn create_test_run(state: &AppState) -> RunId {
+        create_test_run_for_tenant(state, "local").await
+    }
+
+    async fn create_test_run_for_tenant(state: &AppState, tenant_id: &str) -> RunId {
+        let tenant_id = tenant_id.to_string();
         with_connection(state.db.clone(), move |conn| {
-            create_queued_run_for_tenant(conn, &test_contract(), "local")
+            create_queued_run_for_tenant(conn, &test_contract(), &tenant_id)
         })
         .await
         .unwrap()
+    }
+
+    async fn audit_outcome_count(state: &AppState, action: &str, outcome: &str) -> i64 {
+        let action = action.to_string();
+        let outcome = outcome.to_string();
+        with_connection(state.db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM audit_events WHERE action = ?1 AND outcome = ?2",
+                rusqlite::params![action, outcome],
+                |row| row.get(0),
+            )
+            .map_err(|source| StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    fn auth_headers(token: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", token.parse().unwrap());
+        headers
     }
 
     fn test_contract() -> Contract {

@@ -19,6 +19,8 @@ use axum::{
 };
 use serde::{Deserialize, Serialize};
 
+const RESOURCE_NOT_VISIBLE_REASON: &str = "resource not found or not visible";
+
 #[derive(Debug, Serialize)]
 pub struct SubmitResponse {
     pub run_id: RunId,
@@ -159,13 +161,16 @@ pub async fn get_run_status(
             audit_allowed(&state, &identity, "runs.read", "run", Some(run_id)).await;
             Ok(Json(summary))
         }
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            format!(
-                "Run telemetry file record not found for ID '{}'",
-                run_id.get()
-            ),
-        )),
+        Ok(None) => {
+            audit_visibility_denied(&state, &identity, "runs.read", "run", run_id.get()).await;
+            Err((
+                StatusCode::NOT_FOUND,
+                format!(
+                    "Run telemetry file record not found for ID '{}'",
+                    run_id.get()
+                ),
+            ))
+        }
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!(
@@ -193,7 +198,11 @@ pub async fn list_run_attempts_handler(
             audit_allowed(&state, &identity, "runs.attempts.read", "run", Some(run_id)).await;
             Ok(Json(attempts))
         }
-        Ok(None) => missing_record("Run", run_id.get()),
+        Ok(None) => {
+            audit_visibility_denied(&state, &identity, "runs.attempts.read", "run", run_id.get())
+                .await;
+            missing_record("Run", run_id.get())
+        }
         Err(store_error) => store_query_error("Failed to query run attempts", store_error),
     }
 }
@@ -222,7 +231,17 @@ pub async fn list_attempt_gates_handler(
             .await;
             Ok(Json(gates))
         }
-        Ok(None) => missing_record("Attempt", attempt_id.get()),
+        Ok(None) => {
+            audit_visibility_denied(
+                &state,
+                &identity,
+                "attempts.gates.read",
+                "attempt",
+                attempt_id.get(),
+            )
+            .await;
+            missing_record("Attempt", attempt_id.get())
+        }
         Err(store_error) => store_query_error("Failed to query attempt gates", store_error),
     }
 }
@@ -244,7 +263,11 @@ pub async fn list_run_evidence_handler(
             audit_allowed(&state, &identity, "runs.evidence.read", "run", Some(run_id)).await;
             Ok(Json(evidence))
         }
-        Ok(None) => missing_record("Run", run_id.get()),
+        Ok(None) => {
+            audit_visibility_denied(&state, &identity, "runs.evidence.read", "run", run_id.get())
+                .await;
+            missing_record("Run", run_id.get())
+        }
         Err(store_error) => store_query_error("Failed to query run evidence", store_error),
     }
 }
@@ -357,10 +380,13 @@ async fn ensure_review_run_exists(
     .await
     {
         Ok(Some(_)) => Ok(()),
-        Ok(None) => Err((
-            StatusCode::NOT_FOUND,
-            format!("Run record not found for ID '{}'", run_id.get()),
-        )),
+        Ok(None) => {
+            audit_visibility_denied(state, identity, "runs.review.read", "run", run_id.get()).await;
+            Err((
+                StatusCode::NOT_FOUND,
+                format!("Run record not found for ID '{}'", run_id.get()),
+            ))
+        }
         Err(store_error) => Err((
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("Failed to query review run: {store_error}"),
@@ -485,6 +511,66 @@ async fn audit_allowed<T>(
         },
     )
     .await;
+}
+
+async fn audit_visibility_denied(
+    state: &AppState,
+    identity: &SecurityIdentity,
+    action: &'static str,
+    resource_type: &'static str,
+    resource_id: i64,
+) {
+    if !hidden_resource_exists(state, resource_type, resource_id).await {
+        return;
+    }
+    audit_event(
+        state,
+        AuditEvent {
+            tenant_id: identity.tenant_id.clone(),
+            actor: identity.actor.clone(),
+            role: identity.role.as_str().to_string(),
+            action: action.to_string(),
+            resource_type: resource_type.to_string(),
+            resource_id: Some(resource_id.to_string()),
+            outcome: "DENIED".to_string(),
+            reason: Some(RESOURCE_NOT_VISIBLE_REASON.to_string()),
+        },
+    )
+    .await;
+}
+
+async fn hidden_resource_exists(
+    state: &AppState,
+    resource_type: &'static str,
+    resource_id: i64,
+) -> bool {
+    with_connection(state.db.clone(), move |conn| match resource_type {
+        "run" => run_exists(conn, resource_id),
+        "attempt" => attempt_exists(conn, resource_id),
+        _ => Ok(false),
+    })
+    .await
+    .unwrap_or(false)
+}
+
+fn run_exists(conn: &rusqlite::Connection, run_id: i64) -> Result<bool, StoreError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM runs WHERE id = ?1)",
+        rusqlite::params![run_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|value| value == 1)
+    .map_err(|source| StoreError::QueryFailed { source })
+}
+
+fn attempt_exists(conn: &rusqlite::Connection, attempt_id: i64) -> Result<bool, StoreError> {
+    conn.query_row(
+        "SELECT EXISTS(SELECT 1 FROM attempts WHERE id = ?1)",
+        rusqlite::params![attempt_id],
+        |row| row.get::<_, i64>(0),
+    )
+    .map(|value| value == 1)
+    .map_err(|source| StoreError::QueryFailed { source })
 }
 
 async fn audit_event(state: &AppState, event: AuditEvent) {
@@ -665,6 +751,115 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cross_tenant_run_status_is_hidden_and_audited() {
+        let state = state_with_trust(
+            "handler-tenant-run-status",
+            super::super::security::TrustControls::api_key("secret|viewer|tenant-b|*"),
+        );
+        let (run_id, _) =
+            create_attempt_test_data_for_tenant(&state, "tenant-run-status", "tenant-a").await;
+
+        let error = get_run_status(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(audit_outcome_count(&state, "runs.read", "DENIED").await, 1);
+    }
+
+    #[tokio::test]
+    async fn cross_tenant_attempt_gates_are_hidden_and_audited() {
+        let state = state_with_trust(
+            "handler-tenant-gates",
+            super::super::security::TrustControls::api_key("secret|viewer|tenant-b|*"),
+        );
+        let (_, attempt_id) =
+            create_attempt_test_data_for_tenant(&state, "tenant-gates", "tenant-a").await;
+
+        let error = list_attempt_gates_handler(
+            AxumPath(attempt_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            audit_outcome_count(&state, "attempts.gates.read", "DENIED").await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn cross_tenant_run_evidence_is_hidden_and_audited() {
+        let state = state_with_trust(
+            "handler-tenant-evidence",
+            super::super::security::TrustControls::api_key("secret|viewer|tenant-b|*"),
+        );
+        let (run_id, _) =
+            create_attempt_test_data_for_tenant(&state, "tenant-evidence", "tenant-a").await;
+
+        let error = list_run_evidence_handler(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(
+            audit_outcome_count(&state, "runs.evidence.read", "DENIED").await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn cross_tenant_review_is_hidden_and_audited() {
+        let state = state_with_trust(
+            "handler-tenant-review",
+            super::super::security::TrustControls::api_key("secret|reviewer|tenant-b|*"),
+        );
+        let run_id = create_pending_review_run(&state, "tenant-review", "tenant-a").await;
+
+        let error = approve_run_review_handler(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+            Json(review_request("wrong tenant")),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(run_status(&state, run_id).await, "PENDING_HUMAN_REVIEW");
+        assert_eq!(
+            audit_outcome_count(&state, "runs.review.read", "DENIED").await,
+            1
+        );
+    }
+
+    #[tokio::test]
+    async fn missing_authenticated_run_is_not_hidden_resource_denial() {
+        let state = state_with_trust(
+            "handler-missing-auth-run",
+            super::super::security::TrustControls::api_key("secret|viewer|tenant-a|*"),
+        );
+
+        let error = get_run_status(AxumPath(999), State(state.clone()), auth_headers("secret"))
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::NOT_FOUND);
+        assert_eq!(audit_outcome_count(&state, "runs.read", "DENIED").await, 0);
+    }
+
+    #[tokio::test]
     async fn submit_requires_api_key_when_security_is_enabled() {
         let state = state_with_trust(
             "handler-auth-required",
@@ -817,10 +1012,36 @@ mod tests {
         .unwrap()
     }
 
-    async fn create_attempt_test_data(state: &AppState, id: &str) -> RunId {
-        let contract = contract_with_id(id);
+    async fn audit_outcome_count(state: &AppState, action: &str, outcome: &str) -> i64 {
+        let action = action.to_string();
+        let outcome = outcome.to_string();
         with_connection(state.db.clone(), move |conn| {
-            let run_id = create_run(conn, &contract)?;
+            conn.query_row(
+                "SELECT COUNT(*) FROM audit_events WHERE action = ?1 AND outcome = ?2",
+                rusqlite::params![action, outcome],
+                |row| row.get(0),
+            )
+            .map_err(|source| StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn create_attempt_test_data(state: &AppState, id: &str) -> RunId {
+        create_attempt_test_data_for_tenant(state, id, "local")
+            .await
+            .0
+    }
+
+    async fn create_attempt_test_data_for_tenant(
+        state: &AppState,
+        id: &str,
+        tenant_id: &str,
+    ) -> (RunId, AttemptId) {
+        let contract = contract_with_id(id);
+        let tenant_id = tenant_id.to_string();
+        with_connection(state.db.clone(), move |conn| {
+            let run_id = create_queued_run_for_tenant(conn, &contract, &tenant_id)?;
             let attempt_id = create_attempt(conn, run_id)?;
             let gate_run_id = record_gate_run(
                 conn,
@@ -837,7 +1058,20 @@ mod tests {
                 Some(gate_run_id),
                 "gate evidence captured",
             )?;
-            Ok(run_id)
+            Ok((run_id, attempt_id))
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn run_status(state: &AppState, run_id: RunId) -> String {
+        with_connection(state.db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT status FROM runs WHERE id = ?1",
+                rusqlite::params![run_id.get()],
+                |row| row.get(0),
+            )
+            .map_err(|source| StoreError::QueryFailed { source })
         })
         .await
         .unwrap()
