@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.20] - 2026-06-04 - Security Trust Foundation
+
+### Added
+- **API Key Security Mode** - Added opt-in `AH_SECURITY_MODE=api-key` HTTP authentication using `AH_API_KEYS` entries shaped as `token|role|tenant|repo_prefixes`
+- **Role Enforcement** - Added viewer, submitter, and admin roles so read and submit endpoints enforce separate permissions
+- **Tenant Run Ownership** - Added `runs.tenant_id` and tenant-scoped run, attempt, gate, and evidence read helpers so API callers cannot inspect another tenant's run data
+- **Repository Policy Model** - Added per-key repository prefix policy enforcement before accepting submitted contracts
+- **Rate Limits and Run Quotas** - Added in-memory request rate limits and submission quotas through `AH_RATE_LIMIT_PER_MINUTE` and `AH_RUN_QUOTA_PER_HOUR`
+- **Security Audit Log** - Added durable `audit_events` storage and HTTP audit writes for allowed and denied run API decisions
+- **Security Coverage** - Added tests for API-key parsing, role rejection, repository policy rejection, rate limiting, tenant-scoped reads, and audit persistence
+
+### Changed
+- **HTTP Handler Trust Boundary** - Run submission and evidence read handlers now authorize before store access and record audit outcomes after decisions
+- **Store Query Boundary** - Public HTTP paths now use tenant-aware store helpers while legacy local helpers are limited to CLI/internal test paths
+
 ## [0.0.19] - 2026-06-04 - Process Isolation Completion
 
 ### Added

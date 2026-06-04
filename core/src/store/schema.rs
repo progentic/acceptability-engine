@@ -11,12 +11,14 @@ const MIGRATE_LEGACY_GATE_RUNS_SQL: &str =
     include_str!("../../migrations/0006_migrate_legacy_gate_runs.sql");
 const REBUILD_EVIDENCE_BUNDLES_SQL: &str =
     include_str!("../../migrations/0007_rebuild_evidence_bundles.sql");
+const SECURITY_TRUST_SQL: &str = include_str!("../../migrations/0008_security_trust.sql");
 
 pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     create_core_tables(conn)?;
     normalize_attempts_table(conn)?;
     migrate_gate_runs_table(conn)?;
     normalize_evidence_bundles_table(conn)?;
+    normalize_security_trust_tables(conn)?;
     create_query_indexes(conn)?;
     Ok(())
 }
@@ -94,6 +96,11 @@ fn add_missing_evidence_descriptor_columns(conn: &Connection) -> Result<(), Stor
     add_text_column_if_missing(conn, "evidence_bundles", "sha256", "TEXT")?;
     add_integer_column_if_missing(conn, "evidence_bundles", "byte_len")?;
     add_text_column_if_missing(conn, "evidence_bundles", "content_type", "TEXT")
+}
+
+fn normalize_security_trust_tables(conn: &Connection) -> Result<(), StoreError> {
+    add_text_column_if_missing(conn, "runs", "tenant_id", "TEXT NOT NULL DEFAULT 'local'")?;
+    execute_migration(conn, SECURITY_TRUST_SQL)
 }
 
 fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {

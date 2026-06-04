@@ -1,3 +1,4 @@
+use super::security::TrustControls;
 use super::worker::RunQueueSender;
 use crate::store::SharedConnection;
 use crate::workspace_mode::WorkspaceMode;
@@ -9,4 +10,5 @@ pub struct AppState {
     pub run_queue: RunQueueSender,
     pub workspace_root: PathBuf,
     pub workspace_mode: WorkspaceMode,
+    pub trust: TrustControls,
 }

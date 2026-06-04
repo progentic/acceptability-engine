@@ -1,5 +1,6 @@
 mod artifacts;
 mod attempt_reads;
+mod audit;
 mod clock;
 mod connection;
 mod evidence;
@@ -14,23 +15,33 @@ mod transaction;
 mod types;
 
 pub use artifacts::{ArtifactInput, ArtifactStore, StoredArtifactDescriptor};
+#[cfg(test)]
 pub use attempt_reads::{list_attempt_gates, list_run_attempts};
+pub use attempt_reads::{list_attempt_gates_for_tenant, list_run_attempts_for_tenant};
+pub use audit::record_audit_event;
 #[cfg(test)]
 pub use connection::{open, shared_connection};
 pub use connection::{pooled_connection, with_connection, SharedConnection};
 pub use evidence::{create_artifact_evidence_bundle, create_evidence_bundle};
+#[cfg(test)]
 pub use evidence_reads::list_run_evidence;
+pub use evidence_reads::list_run_evidence_for_tenant;
 pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
+#[cfg(test)]
 pub use queries::{fetch_run_summary, list_runs};
+pub use queries::{fetch_run_summary_for_tenant, list_runs_for_tenant};
+#[cfg(test)]
+pub use runs::create_queued_run;
 pub use runs::{
-    create_attempt, create_queued_run, create_run, update_attempt_status, update_run_status,
+    create_attempt, create_queued_run_for_tenant, create_run, update_attempt_status,
+    update_run_status,
 };
 pub use rusqlite::Connection;
 pub use transaction::with_transaction;
 pub use types::{
-    AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleSummary, GateRunId, RunId,
-    RunListItem, RunStatusSummary,
+    AttemptGateDetail, AttemptId, AttemptSummary, AuditEvent, EvidenceBundleSummary, GateRunId,
+    RunId, RunListItem, RunStatusSummary,
 };
 
 #[cfg(test)]
@@ -250,6 +261,51 @@ mod tests {
         assert_eq!(evidence[0].kind, "summary");
         assert_eq!(evidence[0].label, "gate evidence captured");
         assert!(evidence[0].storage_uri.is_none());
+    }
+
+    #[test]
+    fn tenant_scoped_run_list_excludes_other_tenants() {
+        let conn = open(":memory:").unwrap();
+        create_queued_run_for_tenant(&conn, &test_contract("tenant-a-run"), "tenant-a").unwrap();
+        create_queued_run_for_tenant(&conn, &test_contract("tenant-b-run"), "tenant-b").unwrap();
+
+        let runs = list_runs_for_tenant(&conn, "tenant-a", None, 100, 0).unwrap();
+
+        assert_eq!(runs.len(), 1);
+        assert_eq!(runs[0].contract_id, "tenant-a-run");
+    }
+
+    #[test]
+    fn tenant_scoped_run_summary_hides_other_tenant_run() {
+        let conn = open(":memory:").unwrap();
+        let run_id =
+            create_queued_run_for_tenant(&conn, &test_contract("tenant-hidden-run"), "tenant-a")
+                .unwrap();
+
+        let summary = fetch_run_summary_for_tenant(&conn, run_id, "tenant-b").unwrap();
+
+        assert!(summary.is_none());
+    }
+
+    #[test]
+    fn records_security_audit_events() {
+        let conn = open(":memory:").unwrap();
+        record_audit_event(
+            &conn,
+            &AuditEvent {
+                tenant_id: "tenant-a".to_string(),
+                actor: "actor-a".to_string(),
+                role: "submitter".to_string(),
+                action: "runs.submit".to_string(),
+                resource_type: "run".to_string(),
+                resource_id: Some("1".to_string()),
+                outcome: "ALLOWED".to_string(),
+                reason: None,
+            },
+        )
+        .unwrap();
+
+        assert_eq!(table_count(&conn, "audit_events"), 1);
     }
 
     #[test]

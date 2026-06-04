@@ -8,8 +8,17 @@ pub fn create_run(conn: &Connection, contract: &Contract) -> Result<RunId, Store
     create_run_with_status(conn, contract, "RUNNING")
 }
 
+#[cfg(test)]
 pub fn create_queued_run(conn: &Connection, contract: &Contract) -> Result<RunId, StoreError> {
-    create_run_with_status(conn, contract, "QUEUED")
+    create_run_for_tenant_with_status(conn, contract, "local", "QUEUED")
+}
+
+pub fn create_queued_run_for_tenant(
+    conn: &Connection,
+    contract: &Contract,
+    tenant_id: &str,
+) -> Result<RunId, StoreError> {
+    create_run_for_tenant_with_status(conn, contract, tenant_id, "QUEUED")
 }
 
 pub fn update_run_status(conn: &Connection, run_id: RunId, status: &str) -> Result<(), StoreError> {
@@ -54,8 +63,17 @@ fn create_run_with_status(
     contract: &Contract,
     status: &str,
 ) -> Result<RunId, StoreError> {
+    create_run_for_tenant_with_status(conn, contract, "local", status)
+}
+
+fn create_run_for_tenant_with_status(
+    conn: &Connection,
+    contract: &Contract,
+    tenant_id: &str,
+    status: &str,
+) -> Result<RunId, StoreError> {
     insert_contract_if_missing(conn, contract)?;
-    insert_run(conn, contract, status)?;
+    insert_run(conn, contract, tenant_id, status)?;
     Ok(RunId::new(conn.last_insert_rowid()))
 }
 
@@ -68,10 +86,15 @@ fn insert_contract_if_missing(conn: &Connection, contract: &Contract) -> Result<
     Ok(())
 }
 
-fn insert_run(conn: &Connection, contract: &Contract, status: &str) -> Result<(), StoreError> {
+fn insert_run(
+    conn: &Connection,
+    contract: &Contract,
+    tenant_id: &str,
+    status: &str,
+) -> Result<(), StoreError> {
     conn.execute(
-        "INSERT INTO runs (contract_id, status, created_at) VALUES (?1, ?2, ?3)",
-        rusqlite::params![contract.id, status, current_unix_seconds()?],
+        "INSERT INTO runs (contract_id, tenant_id, status, created_at) VALUES (?1, ?2, ?3, ?4)",
+        rusqlite::params![contract.id, tenant_id, status, current_unix_seconds()?],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(())

@@ -149,3 +149,15 @@ pub struct EvidenceBundleSummary {
     pub summary: String,
     pub created_at: i64,
 }
+
+#[derive(Clone, Debug)]
+pub struct AuditEvent {
+    pub tenant_id: String,
+    pub actor: String,
+    pub role: String,
+    pub action: String,
+    pub resource_type: String,
+    pub resource_id: Option<String>,
+    pub outcome: String,
+    pub reason: Option<String>,
+}

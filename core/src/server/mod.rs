@@ -1,4 +1,5 @@
 pub mod handlers;
+pub mod security;
 pub mod state;
 pub mod worker;
 
@@ -23,11 +24,13 @@ pub async fn run_server(
     let (sender, receiver) = run_queue();
     let artifact_store = ArtifactStore::new(artifact_root);
     let worker = spawn_run_worker(db.clone(), artifact_store, receiver);
+    let trust = security::TrustControls::from_env().map_err(std::io::Error::other)?;
     let state = AppState {
         db,
         run_queue: sender,
         workspace_root,
         workspace_mode,
+        trust,
     };
 
     let app = Router::new()

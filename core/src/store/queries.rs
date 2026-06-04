@@ -5,10 +5,22 @@ use rusqlite::{Connection, Row, Rows};
 
 const MAX_RUN_LIST_LIMIT: u32 = 100;
 
+#[cfg(test)]
 pub fn fetch_run_summary(
     conn: &Connection,
     run_id: RunId,
 ) -> Result<Option<RunStatusSummary>, StoreError> {
+    fetch_run_summary_for_tenant(conn, run_id, "local")
+}
+
+pub fn fetch_run_summary_for_tenant(
+    conn: &Connection,
+    run_id: RunId,
+    tenant_id: &str,
+) -> Result<Option<RunStatusSummary>, StoreError> {
+    if !run_belongs_to_tenant(conn, run_id, tenant_id)? {
+        return Ok(None);
+    }
     let Some(mut summary) = fetch_run_header(conn, run_id)? else {
         return Ok(None);
     };
@@ -16,14 +28,25 @@ pub fn fetch_run_summary(
     Ok(Some(summary))
 }
 
+#[cfg(test)]
 pub fn list_runs(
     conn: &Connection,
     status_filter: Option<&str>,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
+    list_runs_for_tenant(conn, "local", status_filter, limit, offset)
+}
+
+pub fn list_runs_for_tenant(
+    conn: &Connection,
+    tenant_id: &str,
+    status_filter: Option<&str>,
+    limit: u32,
+    offset: u32,
+) -> Result<Vec<RunListItem>, StoreError> {
     validate_run_list_limit(limit)?;
-    query_run_list(conn, status_filter, limit, offset)
+    query_run_list(conn, tenant_id, status_filter, limit, offset)
 }
 
 fn fetch_run_header(
@@ -40,6 +63,20 @@ fn fetch_run_header(
         return Ok(None);
     };
     Ok(Some(run_summary_from_row(row)?))
+}
+
+fn run_belongs_to_tenant(
+    conn: &Connection,
+    run_id: RunId,
+    tenant_id: &str,
+) -> Result<bool, StoreError> {
+    let mut stmt = conn
+        .prepare("SELECT 1 FROM runs WHERE id = ?1 AND tenant_id = ?2 LIMIT 1")
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    let mut rows = stmt
+        .query(rusqlite::params![run_id.get(), tenant_id])
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    next_row(&mut rows).map(|row| row.is_some())
 }
 
 fn fetch_latest_attempt_gates(
@@ -96,41 +133,44 @@ fn validate_run_list_limit(limit: u32) -> Result<(), StoreError> {
 
 fn query_run_list(
     conn: &Connection,
+    tenant_id: &str,
     status_filter: Option<&str>,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
     match status_filter {
-        Some(status) => query_run_list_by_status(conn, status, limit, offset),
-        None => query_run_list_without_status(conn, limit, offset),
+        Some(status) => query_run_list_by_status(conn, tenant_id, status, limit, offset),
+        None => query_run_list_without_status(conn, tenant_id, limit, offset),
     }
 }
 
 fn query_run_list_by_status(
     conn: &Connection,
+    tenant_id: &str,
     status: &str,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE status = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3")
+        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE tenant_id = ?1 AND status = ?2 ORDER BY created_at DESC LIMIT ?3 OFFSET ?4")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![status, limit, offset])
+        .query(rusqlite::params![tenant_id, status, limit, offset])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_run_list_items(rows)
 }
 
 fn query_run_list_without_status(
     conn: &Connection,
+    tenant_id: &str,
     limit: u32,
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id, contract_id, status, created_at FROM runs ORDER BY created_at DESC LIMIT ?1 OFFSET ?2")
+        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE tenant_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3")
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
-        .query(rusqlite::params![limit, offset])
+        .query(rusqlite::params![tenant_id, limit, offset])
         .map_err(|source| StoreError::QueryFailed { source })?;
     collect_run_list_items(rows)
 }
