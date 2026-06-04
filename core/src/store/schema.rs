@@ -12,6 +12,7 @@ const MIGRATE_LEGACY_GATE_RUNS_SQL: &str =
 const REBUILD_EVIDENCE_BUNDLES_SQL: &str =
     include_str!("../../migrations/0007_rebuild_evidence_bundles.sql");
 const SECURITY_TRUST_SQL: &str = include_str!("../../migrations/0008_security_trust.sql");
+const REVIEW_DECISIONS_SQL: &str = include_str!("../../migrations/0009_review_decisions.sql");
 
 pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     create_core_tables(conn)?;
@@ -19,6 +20,7 @@ pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     migrate_gate_runs_table(conn)?;
     normalize_evidence_bundles_table(conn)?;
     normalize_security_trust_tables(conn)?;
+    normalize_review_decision_tables(conn)?;
     create_query_indexes(conn)?;
     Ok(())
 }
@@ -101,6 +103,11 @@ fn add_missing_evidence_descriptor_columns(conn: &Connection) -> Result<(), Stor
 fn normalize_security_trust_tables(conn: &Connection) -> Result<(), StoreError> {
     add_text_column_if_missing(conn, "runs", "tenant_id", "TEXT NOT NULL DEFAULT 'local'")?;
     execute_migration(conn, SECURITY_TRUST_SQL)
+}
+
+fn normalize_review_decision_tables(conn: &Connection) -> Result<(), StoreError> {
+    execute_migration(conn, REVIEW_DECISIONS_SQL)?;
+    add_integer_column_if_missing(conn, "evidence_bundles", "review_decision_id")
 }
 
 fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {

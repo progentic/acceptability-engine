@@ -57,6 +57,14 @@ pub async fn run_server(
             get(handlers::list_run_evidence_handler),
         )
         .route(
+            "/runs/:id/review/approve",
+            post(handlers::approve_run_review_handler),
+        )
+        .route(
+            "/runs/:id/review/reject",
+            post(handlers::reject_run_review_handler),
+        )
+        .route(
             "/attempts/:id/gates",
             get(handlers::list_attempt_gates_handler),
         )

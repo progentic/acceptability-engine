@@ -40,6 +40,8 @@ The HTTP server exposes the control plane:
 - `GET /runs/:id`
 - `GET /runs/:id/attempts`
 - `GET /runs/:id/evidence`
+- `POST /runs/:id/review/approve`
+- `POST /runs/:id/review/reject`
 - `GET /attempts/:id/gates`
 
 `POST /runs` creates a queued run. It does not execute the full gate sequence inside the request lifecycle.
@@ -56,9 +58,9 @@ API-key mode accepts entries shaped as:
 token|role|tenant|repo_prefixes
 ```
 
-The role controls read and submit authority. The tenant scopes run and evidence access. The repository prefixes constrain which repositories a submitter may target.
+The role controls read, submit, and review authority. The tenant scopes run and evidence access. The repository prefixes constrain which repositories a submitter may target.
 
-Security denials are recorded as audit events. Accepted reads and submissions are also audited.
+Security denials are recorded as audit events. Accepted reads, submissions, and review decisions are also audited.
 
 ### 3. Run queue and worker
 
@@ -93,6 +95,8 @@ The final decision is one of:
 - `PENDING_HUMAN_REVIEW`
 
 Infrastructure failure is not the same as rejection. Gate runner infrastructure errors mark the attempt `ERROR` and the run `FAILED_INTERNAL`.
+
+Human review is a separate authority boundary. When a run is `PENDING_HUMAN_REVIEW`, a reviewer may approve or reject it through the Rust API. The review transaction records the review decision, links evidence to the review record, updates the run status, and writes the final decision.
 
 ### 5. Gate runner
 
@@ -133,11 +137,14 @@ The evidence model has these durable identities:
 - Run
 - Attempt
 - Gate run
+- Review decision
 - Evidence bundle
 - Final decision
 - Audit event
 
 A run may have multiple attempts. An attempt owns the gate run records for that execution. Evidence bundles may link to a run, an attempt, and a gate run.
+
+Human-review evidence links to the review decision that produced it.
 
 Gate telemetry artifacts are written to the artifact store before SQLite finalization. SQLite finalization then records gate rows, evidence descriptors, attempt status, run status, and final decision in one transaction.
 
@@ -173,7 +180,7 @@ This is not a full adversarial sandbox by itself. Production isolation must stil
 
 ## API and UI relationship
 
-The TypeScript UI is a browser dashboard. It talks to the Rust API. It can submit contracts, list runs, inspect a run, inspect attempts, inspect gate records, inspect evidence descriptors, and render the human review queue.
+The TypeScript UI is a browser dashboard. It talks to the Rust API. It can submit contracts, list runs, inspect a run, inspect attempts, inspect gate records, inspect evidence descriptors, render the human review queue, and call the Rust review endpoints.
 
 The UI must not bypass the API. It must not infer a final decision that the API has not recorded.
 
@@ -217,7 +224,7 @@ It does not implement remote Git materialization.
 
 It does not provide a full multi-user identity provider.
 
-It does not implement a complete human-review approval workflow.
+It does not implement multi-stage approvals or external identity-provider integration for review decisions.
 
 It does not replace CI/CD. It supplies an evidence-producing admission boundary that can integrate with CI/CD later.
 

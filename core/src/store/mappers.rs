@@ -1,6 +1,6 @@
 use super::types::{
     AttemptGateDetail, AttemptId, AttemptSummary, EvidenceBundleId, EvidenceBundleSummary,
-    GateRunId, GateRunSummary, RunId, RunListItem, RunStatusSummary,
+    GateRunId, GateRunSummary, ReviewDecisionId, RunId, RunListItem, RunStatusSummary,
 };
 use crate::error::StoreError;
 use rusqlite::Row;
@@ -78,14 +78,15 @@ pub(super) fn evidence_bundle_summary_from_row(
         run_id: read_run_id(row, 1)?,
         attempt_id: read_optional_attempt_id(row, 2)?,
         gate_run_id: read_optional_gate_run_id(row, 3)?,
-        kind: read_column(row, 4)?,
-        label: read_column(row, 5)?,
-        storage_uri: read_column(row, 6)?,
-        sha256: read_column(row, 7)?,
-        byte_len: read_column(row, 8)?,
-        content_type: read_column(row, 9)?,
-        summary: read_column(row, 10)?,
-        created_at: read_column(row, 11)?,
+        review_decision_id: read_optional_review_decision_id(row, 4)?,
+        kind: read_column(row, 5)?,
+        label: read_column(row, 6)?,
+        storage_uri: read_column(row, 7)?,
+        sha256: read_column(row, 8)?,
+        byte_len: read_column(row, 9)?,
+        content_type: read_column(row, 10)?,
+        summary: read_column(row, 11)?,
+        created_at: read_column(row, 12)?,
     })
 }
 
@@ -112,6 +113,13 @@ fn read_gate_run_id(row: &Row<'_>, index: usize) -> Result<GateRunId, StoreError
 
 fn read_optional_gate_run_id(row: &Row<'_>, index: usize) -> Result<Option<GateRunId>, StoreError> {
     read_column::<Option<i64>>(row, index).map(|value| value.map(GateRunId::new))
+}
+
+fn read_optional_review_decision_id(
+    row: &Row<'_>,
+    index: usize,
+) -> Result<Option<ReviewDecisionId>, StoreError> {
+    read_column::<Option<i64>>(row, index).map(|value| value.map(ReviewDecisionId::new))
 }
 
 fn read_evidence_bundle_id(row: &Row<'_>, index: usize) -> Result<EvidenceBundleId, StoreError> {

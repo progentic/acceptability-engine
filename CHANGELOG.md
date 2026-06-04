@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.23] - 2026-06-04 - Human Review Authority
+
+### Added
+- **Review Decisions** - Added `review_decisions` persistence with reviewer actor, reviewer role, decision, reason, and timestamp
+- **Review Endpoints** - Added `POST /runs/:id/review/approve` and `POST /runs/:id/review/reject` as Rust-authoritative human review decisions
+- **Reviewer Role** - Added a `reviewer` API-key role that can read runs and finalize pending human review runs without submit authority
+- **Review Evidence Linkage** - Added `review_decision_id` evidence linkage so human-review evidence points to the review record that produced it
+- **API Documentation** - Added `docs/API.md` with authentication, run, evidence, attempt, review, and operations endpoint documentation
+- **Review Coverage** - Added approval, rejection, authorization, persistence, timestamp, audit, and evidence-linkage tests
+
+### Changed
+- **Pending Review Finalization** - `PENDING_HUMAN_REVIEW` runs now become terminal only through a transactional review decision that writes evidence and a final decision
+- **Governance Navigation** - `AGENTS.md` now points API changes at `docs/API.md`
+
 ## [0.0.22] - 2026-06-04 - CI Build Stabilization
 
 ### Added

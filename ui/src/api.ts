@@ -3,6 +3,8 @@ import type {
   AttemptSummary,
   ContractSubmission,
   EvidenceBundleSummary,
+  ReviewDecisionRequest,
+  ReviewDecisionResponse,
   RunDetail,
   RunListItem,
   RunStatus,
@@ -39,6 +41,26 @@ export class ApiClient {
 
   async listEvidence(runId: number): Promise<EvidenceBundleSummary[]> {
     return this.getJson<EvidenceBundleSummary[]>(`/runs/${runId}/evidence`);
+  }
+
+  async approveReview(
+    runId: number,
+    request: ReviewDecisionRequest,
+  ): Promise<ReviewDecisionResponse> {
+    return this.postJson<ReviewDecisionResponse>(
+      `/runs/${runId}/review/approve`,
+      request,
+    );
+  }
+
+  async rejectReview(
+    runId: number,
+    request: ReviewDecisionRequest,
+  ): Promise<ReviewDecisionResponse> {
+    return this.postJson<ReviewDecisionResponse>(
+      `/runs/${runId}/review/reject`,
+      request,
+    );
   }
 
   async getRunDetail(runId: number): Promise<RunDetail> {

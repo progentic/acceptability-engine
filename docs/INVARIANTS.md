@@ -108,6 +108,10 @@ A pending human review run must not create an approved final decision.
 
 A human review workflow must record reviewer identity, decision, reason, and timestamp before converting the run into a terminal approved or rejected state.
 
+Human review approval and rejection must be performed through Rust API endpoints.
+
+Human review must create evidence linked to the persisted review decision.
+
 ## 10. Attempts own gate records
 
 Gate records belong to attempts, not directly to runs.
@@ -143,6 +147,8 @@ Each artifact descriptor must include:
 - summary
 
 Evidence linked to a gate must identify the run, attempt, and gate run when those identities exist.
+
+Evidence linked to a human review decision must identify the run and review decision.
 
 ## 13. SQLite finalization must be transactional
 

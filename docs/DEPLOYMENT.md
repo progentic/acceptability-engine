@@ -38,6 +38,8 @@ token|role|tenant|repo_prefixes
 
 Use `;` between multiple keys. Use comma-separated repository prefixes inside one key.
 
+Supported roles are `viewer`, `submitter`, `reviewer`, and `admin`.
+
 ## Required Environment
 
 - `AH_WORKSPACE_MODE=local`

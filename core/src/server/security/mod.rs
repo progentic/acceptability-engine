@@ -84,6 +84,16 @@ impl TrustControls {
         Ok(identity)
     }
 
+    pub async fn authorize_review(
+        &self,
+        headers: &HeaderMap,
+    ) -> Result<SecurityIdentity, SecurityRejection> {
+        let identity = self.authenticate(headers)?;
+        require_review_role(&identity)?;
+        self.enforce_request_limit(&identity).await?;
+        Ok(identity)
+    }
+
     fn new(config: SecurityConfig) -> Self {
         Self {
             config: Arc::new(config),
@@ -211,6 +221,17 @@ fn require_submit_role(identity: &SecurityIdentity) -> Result<(), SecurityReject
     ))
 }
 
+fn require_review_role(identity: &SecurityIdentity) -> Result<(), SecurityRejection> {
+    if identity.can_review() {
+        return Ok(());
+    }
+    Err(SecurityRejection::from_identity(
+        StatusCode::FORBIDDEN,
+        "role cannot review runs",
+        identity.clone(),
+    ))
+}
+
 fn require_repo_policy(
     identity: &SecurityIdentity,
     contract: &Contract,
@@ -309,6 +330,30 @@ mod tests {
                 &auth_headers("secret"),
                 &contract("https://github.com/other/repo.git"),
             )
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn authorizes_reviewer_decisions() {
+        let controls = TrustControls::api_key("secret|reviewer|tenant-a|*");
+
+        let identity = controls
+            .authorize_review(&auth_headers("secret"))
+            .await
+            .unwrap();
+
+        assert_eq!(identity.tenant_id, "tenant-a");
+    }
+
+    #[tokio::test]
+    async fn rejects_submitter_review_decision() {
+        let controls = TrustControls::api_key("secret|submitter|tenant-a|*");
+
+        let error = controls
+            .authorize_review(&auth_headers("secret"))
             .await
             .unwrap_err();
 

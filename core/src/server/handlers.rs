@@ -4,10 +4,12 @@ use super::worker::RunWork;
 use crate::contract::Contract;
 use crate::error::{StoreError, ValidationError};
 use crate::store::{
-    create_queued_run_for_tenant, fetch_run_summary_for_tenant, list_attempt_gates_for_tenant,
-    list_run_attempts_for_tenant, list_run_evidence_for_tenant, list_runs_for_tenant,
-    record_audit_event, update_run_status, with_connection, AttemptGateDetail, AttemptId,
-    AttemptSummary, AuditEvent, EvidenceBundleSummary, RunId, RunListItem,
+    create_queued_run_for_tenant, fetch_run_summary_for_tenant, finalize_human_review,
+    list_attempt_gates_for_tenant, list_run_attempts_for_tenant, list_run_evidence_for_tenant,
+    list_runs_for_tenant, record_audit_event, update_run_status, with_connection,
+    AttemptGateDetail, AttemptId, AttemptSummary, AuditEvent, EvidenceBundleId,
+    EvidenceBundleSummary, ReviewDecisionId, ReviewDecisionInput, ReviewDecisionKind, RunId,
+    RunListItem,
 };
 use crate::workspace_mode::WorkspaceMode;
 use axum::{
@@ -23,6 +25,19 @@ pub struct SubmitResponse {
     pub run_id: RunId,
     pub status: String,
     pub reason: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ReviewDecisionRequest {
+    reason: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReviewDecisionResponse {
+    pub run_id: RunId,
+    pub status: String,
+    pub review_decision_id: ReviewDecisionId,
+    pub evidence_bundle_id: EvidenceBundleId,
 }
 
 #[derive(Deserialize)]
@@ -289,12 +304,149 @@ pub async fn list_runs_handler(
     }
 }
 
+pub async fn approve_run_review_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ReviewDecisionRequest>,
+) -> Result<Json<ReviewDecisionResponse>, (StatusCode, String)> {
+    review_run(
+        state,
+        headers,
+        RunId::new(run_id),
+        request,
+        ReviewDecisionKind::Approve,
+        "runs.review.approve",
+    )
+    .await
+}
+
+pub async fn reject_run_review_handler(
+    AxumPath(run_id): AxumPath<i64>,
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ReviewDecisionRequest>,
+) -> Result<Json<ReviewDecisionResponse>, (StatusCode, String)> {
+    review_run(
+        state,
+        headers,
+        RunId::new(run_id),
+        request,
+        ReviewDecisionKind::Reject,
+        "runs.review.reject",
+    )
+    .await
+}
+
+async fn review_run(
+    state: AppState,
+    headers: HeaderMap,
+    run_id: RunId,
+    request: ReviewDecisionRequest,
+    decision: ReviewDecisionKind,
+    action: &'static str,
+) -> Result<Json<ReviewDecisionResponse>, (StatusCode, String)> {
+    let identity = authorize_review(&state, &headers, action).await?;
+    validate_review_request(&request)?;
+    ensure_review_run_exists(&state, &identity, run_id).await?;
+    let recorded = finalize_review_record(&state, &identity, run_id, decision, &request).await?;
+    audit_allowed(&state, &identity, action, "run", Some(run_id)).await;
+    Ok(Json(ReviewDecisionResponse {
+        run_id,
+        status: decision.status().to_string(),
+        review_decision_id: recorded.review_decision_id,
+        evidence_bundle_id: recorded.evidence_bundle_id,
+    }))
+}
+
+fn validate_review_request(request: &ReviewDecisionRequest) -> Result<(), (StatusCode, String)> {
+    if !request.reason.trim().is_empty() {
+        return Ok(());
+    }
+    Err((
+        StatusCode::BAD_REQUEST,
+        "review reason must not be empty".to_string(),
+    ))
+}
+
+async fn ensure_review_run_exists(
+    state: &AppState,
+    identity: &SecurityIdentity,
+    run_id: RunId,
+) -> Result<(), (StatusCode, String)> {
+    let tenant_id = identity.tenant_id.clone();
+    match with_connection(state.db.clone(), move |conn| {
+        fetch_run_summary_for_tenant(conn, run_id, &tenant_id)
+    })
+    .await
+    {
+        Ok(Some(_)) => Ok(()),
+        Ok(None) => Err((
+            StatusCode::NOT_FOUND,
+            format!("Run record not found for ID '{}'", run_id.get()),
+        )),
+        Err(store_error) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to query review run: {store_error}"),
+        )),
+    }
+}
+
+async fn finalize_review_record(
+    state: &AppState,
+    identity: &SecurityIdentity,
+    run_id: RunId,
+    decision: ReviewDecisionKind,
+    request: &ReviewDecisionRequest,
+) -> Result<crate::store::RecordedReviewDecision, (StatusCode, String)> {
+    let tenant_id = identity.tenant_id.clone();
+    let reviewer_actor = identity.actor.clone();
+    let reviewer_role = identity.role.as_str().to_string();
+    let reason = request.reason.clone();
+    with_connection(state.db.clone(), move |conn| {
+        finalize_human_review(
+            conn,
+            ReviewDecisionInput {
+                run_id,
+                tenant_id: &tenant_id,
+                reviewer_actor: &reviewer_actor,
+                reviewer_role: &reviewer_role,
+                decision,
+                reason: &reason,
+            },
+        )
+    })
+    .await
+    .map_err(review_store_error)
+}
+
+fn review_store_error(store_error: StoreError) -> (StatusCode, String) {
+    match store_error {
+        StoreError::InvalidParameter(message) => (StatusCode::CONFLICT, message),
+        error => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            format!("Failed to finalize review decision: {error}"),
+        ),
+    }
+}
+
 async fn authorize_read(
     state: &AppState,
     headers: &HeaderMap,
     action: &'static str,
 ) -> Result<SecurityIdentity, (StatusCode, String)> {
     match state.trust.authorize_read(headers).await {
+        Ok(identity) => Ok(identity),
+        Err(rejection) => reject_request(state, rejection, action).await,
+    }
+}
+
+async fn authorize_review(
+    state: &AppState,
+    headers: &HeaderMap,
+    action: &'static str,
+) -> Result<SecurityIdentity, (StatusCode, String)> {
+    match state.trust.authorize_review(headers).await {
         Ok(identity) => Ok(identity),
         Err(rejection) => reject_request(state, rejection, action).await,
     }
@@ -396,8 +548,8 @@ fn store_query_error<T>(
 mod tests {
     use super::*;
     use crate::store::{
-        create_attempt, create_evidence_bundle, create_run, list_run_attempts, open,
-        record_gate_run, shared_connection,
+        create_attempt, create_evidence_bundle, create_queued_run_for_tenant, create_run,
+        list_run_attempts, open, record_gate_run, shared_connection, update_run_status,
     };
 
     fn contract_with_id(id: &str) -> Contract {
@@ -555,6 +707,80 @@ mod tests {
         assert_eq!(error.0, StatusCode::UNAUTHORIZED);
     }
 
+    #[tokio::test]
+    async fn approves_pending_human_review_run() {
+        let state = state_with_trust(
+            "handler-review-approve",
+            super::super::security::TrustControls::api_key("secret|reviewer|tenant-a|*"),
+        );
+        let run_id = create_pending_review_run(&state, "handler-review-approve", "tenant-a").await;
+
+        let Json(response) = approve_run_review_handler(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+            Json(review_request("approved after inspection")),
+        )
+        .await
+        .unwrap();
+        let Json(evidence) = list_run_evidence_handler(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status, "APPROVED");
+        assert_eq!(response.run_id, run_id);
+        assert_eq!(audit_event_count(&state, "runs.review.approve").await, 1);
+        assert!(evidence
+            .iter()
+            .any(|item| item.review_decision_id == Some(response.review_decision_id)));
+    }
+
+    #[tokio::test]
+    async fn rejects_pending_human_review_run() {
+        let state = state_with_trust(
+            "handler-review-reject",
+            super::super::security::TrustControls::api_key("secret|reviewer|tenant-a|*"),
+        );
+        let run_id = create_pending_review_run(&state, "handler-review-reject", "tenant-a").await;
+
+        let Json(response) = reject_run_review_handler(
+            AxumPath(run_id.get()),
+            State(state),
+            auth_headers("secret"),
+            Json(review_request("evidence did not satisfy policy")),
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(response.status, "REJECTED");
+        assert_eq!(response.run_id, run_id);
+    }
+
+    #[tokio::test]
+    async fn submitter_cannot_review_run() {
+        let state = state_with_trust(
+            "handler-review-auth",
+            super::super::security::TrustControls::api_key("secret|submitter|tenant-a|*"),
+        );
+        let run_id = create_pending_review_run(&state, "handler-review-auth", "tenant-a").await;
+
+        let error = approve_run_review_handler(
+            AxumPath(run_id.get()),
+            State(state.clone()),
+            auth_headers("secret"),
+            Json(review_request("not authorized")),
+        )
+        .await
+        .unwrap_err();
+
+        assert_eq!(error.0, StatusCode::FORBIDDEN);
+        assert_eq!(audit_event_count(&state, "runs.review.approve").await, 1);
+    }
+
     fn state_with_seeded_run(id: &str) -> AppState {
         state_with_trust(id, super::super::security::TrustControls::disabled())
     }
@@ -575,6 +801,44 @@ mod tests {
 
     fn headers() -> HeaderMap {
         HeaderMap::new()
+    }
+
+    fn auth_headers(token: &str) -> HeaderMap {
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", token.parse().unwrap());
+        headers
+    }
+
+    fn review_request(reason: &str) -> ReviewDecisionRequest {
+        ReviewDecisionRequest {
+            reason: reason.to_string(),
+        }
+    }
+
+    async fn create_pending_review_run(state: &AppState, id: &str, tenant_id: &str) -> RunId {
+        let contract = contract_with_id(id);
+        let tenant_id = tenant_id.to_string();
+        with_connection(state.db.clone(), move |conn| {
+            let run_id = create_queued_run_for_tenant(conn, &contract, &tenant_id)?;
+            update_run_status(conn, run_id, "PENDING_HUMAN_REVIEW")?;
+            Ok(run_id)
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn audit_event_count(state: &AppState, action: &str) -> i64 {
+        let action = action.to_string();
+        with_connection(state.db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM audit_events WHERE action = ?1",
+                rusqlite::params![action],
+                |row| row.get(0),
+            )
+            .map_err(|source| StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
     }
 
     async fn create_attempt_test_data(state: &AppState, id: &str) -> RunId {

@@ -1,6 +1,6 @@
 use super::artifacts::StoredArtifactDescriptor;
 use super::clock::current_unix_seconds;
-use super::types::{AttemptId, EvidenceBundleId, GateRunId, RunId};
+use super::types::{AttemptId, EvidenceBundleId, GateRunId, ReviewDecisionId, RunId};
 use crate::error::StoreError;
 use rusqlite::Connection;
 
@@ -8,6 +8,7 @@ pub struct EvidenceDescriptor<'a> {
     pub run_id: RunId,
     pub attempt_id: Option<AttemptId>,
     pub gate_run_id: Option<GateRunId>,
+    pub review_decision_id: Option<ReviewDecisionId>,
     pub kind: &'a str,
     pub label: &'a str,
     pub storage_uri: Option<&'a str>,
@@ -30,6 +31,7 @@ pub fn create_evidence_bundle(
             run_id,
             attempt_id,
             gate_run_id,
+            review_decision_id: None,
             kind: "summary",
             label: summary,
             storage_uri: None,
@@ -54,6 +56,7 @@ pub fn create_artifact_evidence_bundle(
             run_id,
             attempt_id,
             gate_run_id,
+            review_decision_id: None,
             kind: &artifact.kind,
             label: &artifact.label,
             storage_uri: Some(&artifact.storage_uri),
@@ -71,13 +74,14 @@ pub fn create_evidence_bundle_record(
 ) -> Result<EvidenceBundleId, StoreError> {
     conn.execute(
         "INSERT INTO evidence_bundles (
-            run_id, attempt_id, gate_run_id, kind, label, storage_uri, sha256,
-            byte_len, content_type, summary, created_at
-         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            run_id, attempt_id, gate_run_id, review_decision_id, kind, label,
+            storage_uri, sha256, byte_len, content_type, summary, created_at
+         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
         rusqlite::params![
             descriptor.run_id.get(),
             descriptor.attempt_id.map(AttemptId::get),
             descriptor.gate_run_id.map(GateRunId::get),
+            descriptor.review_decision_id.map(ReviewDecisionId::get),
             descriptor.kind,
             descriptor.label,
             descriptor.storage_uri,

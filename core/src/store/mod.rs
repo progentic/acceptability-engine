@@ -10,6 +10,7 @@ mod gate_records;
 mod health;
 mod mappers;
 mod queries;
+mod review_decisions;
 mod runs;
 mod schema;
 mod transaction;
@@ -33,6 +34,9 @@ pub use health::check_store_ready;
 #[cfg(test)]
 pub use queries::{fetch_run_summary, list_runs};
 pub use queries::{fetch_run_summary_for_tenant, list_runs_for_tenant};
+pub use review_decisions::{
+    finalize_human_review, RecordedReviewDecision, ReviewDecisionInput, ReviewDecisionKind,
+};
 #[cfg(test)]
 pub use runs::create_queued_run;
 pub use runs::{
@@ -42,8 +46,8 @@ pub use runs::{
 pub use rusqlite::Connection;
 pub use transaction::with_transaction;
 pub use types::{
-    AttemptGateDetail, AttemptId, AttemptSummary, AuditEvent, EvidenceBundleSummary, GateRunId,
-    RunId, RunListItem, RunStatusSummary,
+    AttemptGateDetail, AttemptId, AttemptSummary, AuditEvent, EvidenceBundleId,
+    EvidenceBundleSummary, GateRunId, ReviewDecisionId, RunId, RunListItem, RunStatusSummary,
 };
 
 #[cfg(test)]
@@ -311,6 +315,88 @@ mod tests {
     }
 
     #[test]
+    fn approving_human_review_records_decision_and_evidence() {
+        let conn = open(":memory:").unwrap();
+        let run_id =
+            create_queued_run_for_tenant(&conn, &test_contract("review-approve"), "tenant-a")
+                .unwrap();
+        update_run_status(&conn, run_id, "PENDING_HUMAN_REVIEW").unwrap();
+
+        let recorded = finalize_human_review(
+            &conn,
+            ReviewDecisionInput {
+                run_id,
+                tenant_id: "tenant-a",
+                reviewer_actor: "reviewer-a",
+                reviewer_role: "reviewer",
+                decision: ReviewDecisionKind::Approve,
+                reason: "meets acceptance criteria",
+            },
+        )
+        .unwrap();
+
+        assert_eq!(run_status(&conn, run_id), "APPROVED");
+        assert_eq!(
+            reviewer_actor(&conn, recorded.review_decision_id),
+            "reviewer-a"
+        );
+        assert!(review_created_at(&conn, recorded.review_decision_id) > 0);
+        assert_eq!(table_count(&conn, "final_decisions"), 1);
+        assert_eq!(
+            review_evidence_id(&conn, recorded.review_decision_id),
+            recorded.evidence_bundle_id
+        );
+    }
+
+    #[test]
+    fn rejecting_human_review_records_rejected_final_decision() {
+        let conn = open(":memory:").unwrap();
+        let run_id =
+            create_queued_run_for_tenant(&conn, &test_contract("review-reject"), "tenant-a")
+                .unwrap();
+        update_run_status(&conn, run_id, "PENDING_HUMAN_REVIEW").unwrap();
+
+        finalize_human_review(
+            &conn,
+            ReviewDecisionInput {
+                run_id,
+                tenant_id: "tenant-a",
+                reviewer_actor: "reviewer-a",
+                reviewer_role: "reviewer",
+                decision: ReviewDecisionKind::Reject,
+                reason: "missing required evidence",
+            },
+        )
+        .unwrap();
+
+        assert_eq!(run_status(&conn, run_id), "REJECTED");
+        assert_eq!(final_decision(&conn, run_id), "REJECTED");
+    }
+
+    #[test]
+    fn review_requires_pending_human_review_state() {
+        let conn = open(":memory:").unwrap();
+        let run_id =
+            create_queued_run_for_tenant(&conn, &test_contract("review-wrong-state"), "tenant-a")
+                .unwrap();
+
+        let result = finalize_human_review(
+            &conn,
+            ReviewDecisionInput {
+                run_id,
+                tenant_id: "tenant-a",
+                reviewer_actor: "reviewer-a",
+                reviewer_role: "reviewer",
+                decision: ReviewDecisionKind::Approve,
+                reason: "looks good",
+            },
+        );
+
+        assert!(matches!(result, Err(StoreError::InvalidParameter(_))));
+        assert_eq!(table_count(&conn, "review_decisions"), 0);
+    }
+
+    #[test]
     fn lists_rich_evidence_bundle_descriptors() {
         let conn = open(":memory:").unwrap();
         let run_id = create_run(&conn, &test_contract("test-rich-evidence")).unwrap();
@@ -321,6 +407,7 @@ mod tests {
                 run_id,
                 attempt_id: Some(attempt_id),
                 gate_run_id: None,
+                review_decision_id: None,
                 kind: "artifact",
                 label: "coverage report",
                 storage_uri: Some("file:///evidence/coverage.json"),
@@ -472,6 +559,54 @@ mod tests {
         conn.query_row(&format!("SELECT COUNT(*) FROM {table_name}"), [], |row| {
             row.get(0)
         })
+        .unwrap()
+    }
+
+    fn run_status(conn: &Connection, run_id: RunId) -> String {
+        conn.query_row(
+            "SELECT status FROM runs WHERE id = ?1",
+            rusqlite::params![run_id.get()],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn final_decision(conn: &Connection, run_id: RunId) -> String {
+        conn.query_row(
+            "SELECT decision FROM final_decisions WHERE run_id = ?1",
+            rusqlite::params![run_id.get()],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn reviewer_actor(conn: &Connection, review_decision_id: ReviewDecisionId) -> String {
+        conn.query_row(
+            "SELECT reviewer_actor FROM review_decisions WHERE id = ?1",
+            rusqlite::params![review_decision_id.get()],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn review_created_at(conn: &Connection, review_decision_id: ReviewDecisionId) -> i64 {
+        conn.query_row(
+            "SELECT created_at FROM review_decisions WHERE id = ?1",
+            rusqlite::params![review_decision_id.get()],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn review_evidence_id(
+        conn: &Connection,
+        review_decision_id: ReviewDecisionId,
+    ) -> EvidenceBundleId {
+        conn.query_row(
+            "SELECT id FROM evidence_bundles WHERE review_decision_id = ?1",
+            rusqlite::params![review_decision_id.get()],
+            |row| row.get::<_, i64>(0).map(EvidenceBundleId::new),
+        )
         .unwrap()
     }
 

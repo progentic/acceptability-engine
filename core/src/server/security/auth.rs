@@ -11,6 +11,7 @@ const WILDCARD_REPO: &str = "*";
 pub enum Role {
     Viewer,
     Submitter,
+    Reviewer,
     Admin,
 }
 
@@ -19,16 +20,24 @@ impl Role {
         match self {
             Self::Viewer => "viewer",
             Self::Submitter => "submitter",
+            Self::Reviewer => "reviewer",
             Self::Admin => "admin",
         }
     }
 
     fn can_read(&self) -> bool {
-        matches!(self, Self::Viewer | Self::Submitter | Self::Admin)
+        matches!(
+            self,
+            Self::Viewer | Self::Submitter | Self::Reviewer | Self::Admin
+        )
     }
 
     fn can_submit(&self) -> bool {
         matches!(self, Self::Submitter | Self::Admin)
+    }
+
+    fn can_review(&self) -> bool {
+        matches!(self, Self::Reviewer | Self::Admin)
     }
 }
 
@@ -56,6 +65,10 @@ impl SecurityIdentity {
 
     pub fn can_submit(&self) -> bool {
         self.role.can_submit()
+    }
+
+    pub fn can_review(&self) -> bool {
+        self.role.can_review()
     }
 
     pub fn allows_contract(&self, contract: &Contract) -> bool {
@@ -158,6 +171,7 @@ fn parse_role(value: &str) -> Result<Role, String> {
     match value {
         "viewer" => Ok(Role::Viewer),
         "submitter" => Ok(Role::Submitter),
+        "reviewer" => Ok(Role::Reviewer),
         "admin" => Ok(Role::Admin),
         _ => Err(format!("unsupported API key role '{value}'")),
     }

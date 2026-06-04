@@ -103,35 +103,41 @@ Steps
 
 Acceptance Evidence
 
-* review_decisions table
-* reviewer identity persisted
-* decision timestamp persisted
-* approval tests
-* rejection tests
-* authorization tests
-* audit events generated
-* evidence linked to review record
+* `review_decisions` table exists in migration `0009_review_decisions.sql`.
+* Reviewer actor, reviewer role, tenant, decision, reason, and decision timestamp are persisted.
+* `POST /runs/:id/review/approve` finalizes pending review runs as `APPROVED`.
+* `POST /runs/:id/review/reject` finalizes pending review runs as `REJECTED`.
+* Reviewer authorization is enforced through the `reviewer` and `admin` roles.
+* Submitter review attempts are rejected and audited.
+* Successful review decisions are audited.
+* Review evidence bundles link back to the persisted review decision.
+* Store tests cover approval, rejection, review state validation, and evidence linkage.
+* Handler/security tests cover approval, rejection, authorization, and audit event generation.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* API documentation
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents the human review authority boundary.
+* `INVARIANTS.md` documents Rust-authoritative review and evidence linkage.
+* `API.md` documents review roles, approval endpoint, and rejection endpoint.
+* `DEPLOYMENT.md` documents the `reviewer` API key role.
+* `CHANGELOG.md` records version `0.0.23 - Human Review Authority`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
+* `npm run build`
 
 Summary
 
-Human review becomes a first-class authority boundary.
+Human review is now a first-class authority boundary. Reviewer decisions are tenant-scoped, role-gated, audited, transactionally finalized, and linked to review evidence.
 
 Notes / Deviations
+
+* Multi-stage approval, delegation chains, and external identity providers remain out of scope for this phase.
 
 ==============================
 PHASE 23 WEBSOCKET STREAMING

@@ -65,6 +65,7 @@ export interface EvidenceBundleSummary {
   run_id: number;
   attempt_id: number | null;
   gate_run_id: number | null;
+  review_decision_id: number | null;
   kind: string;
   label: string;
   storage_uri: string | null;
@@ -80,4 +81,15 @@ export interface RunDetail {
   attempts: AttemptSummary[];
   gates: AttemptGateDetail[];
   evidence: EvidenceBundleSummary[];
+}
+
+export interface ReviewDecisionRequest {
+  reason: string;
+}
+
+export interface ReviewDecisionResponse {
+  run_id: number;
+  status: RunStatus;
+  review_decision_id: number;
+  evidence_bundle_id: number;
 }

@@ -80,6 +80,26 @@ impl FinalDecisionId {
     }
 }
 
+#[derive(Serialize, Copy, Clone, Debug, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct ReviewDecisionId(i64);
+
+impl ReviewDecisionId {
+    pub const fn new(value: i64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> i64 {
+        self.0
+    }
+}
+
+impl From<ReviewDecisionId> for i64 {
+    fn from(value: ReviewDecisionId) -> Self {
+        value.get()
+    }
+}
+
 #[derive(Serialize, Clone, Debug)]
 pub struct RunStatusSummary {
     pub run_id: RunId,
@@ -140,6 +160,7 @@ pub struct EvidenceBundleSummary {
     pub run_id: RunId,
     pub attempt_id: Option<AttemptId>,
     pub gate_run_id: Option<GateRunId>,
+    pub review_decision_id: Option<ReviewDecisionId>,
     pub kind: String,
     pub label: String,
     pub storage_uri: Option<String>,

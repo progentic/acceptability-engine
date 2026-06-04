@@ -40,7 +40,13 @@ Use the repository documents in this order.
 
    Read this before changing health checks, metrics, container behavior, Kubernetes manifests, environment variables, runtime paths, or production operation notes.
 
-6. `CHANGELOG.md`
+6. `docs/API.md`
+
+   Defines public HTTP API behavior.
+
+   Read this before changing routes, request models, response models, status codes, authentication requirements, or API examples.
+
+7. `CHANGELOG.md`
 
    Records user-visible and governance-relevant changes.
 
