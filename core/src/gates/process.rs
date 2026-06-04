@@ -1,6 +1,7 @@
 use crate::error::process::ProcessError;
 use crate::gates::result::ExecutionResult;
 use crate::gates::sandbox::apply_sandbox_policy;
+use crate::gates::sandbox_runner::{runner_command, set_runner_timeout};
 use std::io::Read;
 use std::process::{Child, Command, Stdio};
 use std::thread;
@@ -8,8 +9,10 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 use wait_timeout::ChildExt;
 
+const OUTPUT_LIMIT_BYTES: usize = 8 * 1024 * 1024;
+
 pub fn execute_with_timeout(
-    mut command: Command,
+    command: Command,
     gate_num: u8,
     success_message: &str,
     failure_message: &str,
@@ -17,7 +20,9 @@ pub fn execute_with_timeout(
 ) -> Result<ExecutionResult, ProcessError> {
     let start_instant = Instant::now();
 
+    let mut command = runner_command(&command)?;
     apply_sandbox_policy(&mut command);
+    set_runner_timeout(&mut command, timeout_duration);
     configure_process_group(&mut command);
 
     let mut child = command
@@ -29,24 +34,20 @@ pub fn execute_with_timeout(
     let mut stdout_stream = take_stdout(&mut child)?;
     let mut stderr_stream = take_stderr(&mut child)?;
 
-    let stdout_worker = thread::spawn(move || -> Result<Vec<u8>, std::io::Error> {
-        let mut buffer = Vec::new();
-        stdout_stream.read_to_end(&mut buffer)?;
-        Ok(buffer)
+    let stdout_worker = thread::spawn(move || {
+        read_limited_output(&mut stdout_stream, "stdout", OUTPUT_LIMIT_BYTES)
     });
 
-    let stderr_worker = thread::spawn(move || -> Result<Vec<u8>, std::io::Error> {
-        let mut buffer = Vec::new();
-        stderr_stream.read_to_end(&mut buffer)?;
-        Ok(buffer)
+    let stderr_worker = thread::spawn(move || {
+        read_limited_output(&mut stderr_stream, "stderr", OUTPUT_LIMIT_BYTES)
     });
 
     let exit_status = match child.wait_timeout(timeout_duration) {
         Ok(Some(status)) => status,
         Ok(None) => {
             terminate_process_tree(&mut child);
-            let _ = collect_output(stdout_worker, "stdout")?;
-            let _ = collect_output(stderr_worker, "stderr")?;
+            let _ = collect_output(stdout_worker, "stdout");
+            let _ = collect_output(stderr_worker, "stderr");
             return Err(ProcessError::Timeout {
                 duration_ms: timeout_duration.as_millis() as u64,
             });
@@ -127,15 +128,46 @@ fn take_stderr(child: &mut Child) -> Result<std::process::ChildStderr, ProcessEr
 }
 
 fn collect_output(
-    worker: JoinHandle<Result<Vec<u8>, std::io::Error>>,
+    worker: JoinHandle<Result<Vec<u8>, ProcessError>>,
     stream_name: &str,
 ) -> Result<Vec<u8>, ProcessError> {
-    worker
-        .join()
-        .map_err(|_| ProcessError::WaitFailed {
-            source: std::io::Error::other(format!("{stream_name} reader panicked thread state")),
-        })?
-        .map_err(|source| ProcessError::WaitFailed { source })
+    worker.join().map_err(|_| ProcessError::WaitFailed {
+        source: std::io::Error::other(format!("{stream_name} reader panicked thread state")),
+    })?
+}
+
+fn read_limited_output(
+    reader: &mut impl Read,
+    stream: &'static str,
+    limit_bytes: usize,
+) -> Result<Vec<u8>, ProcessError> {
+    let mut buffer = Vec::new();
+    let mut chunk = [0_u8; 8192];
+    loop {
+        let bytes_read = reader
+            .read(&mut chunk)
+            .map_err(|source| ProcessError::WaitFailed { source })?;
+        if bytes_read == 0 {
+            return Ok(buffer);
+        }
+        append_output_chunk(&mut buffer, &chunk[..bytes_read], stream, limit_bytes)?;
+    }
+}
+
+fn append_output_chunk(
+    buffer: &mut Vec<u8>,
+    chunk: &[u8],
+    stream: &'static str,
+    limit_bytes: usize,
+) -> Result<(), ProcessError> {
+    if buffer.len() + chunk.len() > limit_bytes {
+        return Err(ProcessError::OutputLimitExceeded {
+            stream,
+            limit_bytes,
+        });
+    }
+    buffer.extend_from_slice(chunk);
+    Ok(())
 }
 
 #[cfg(test)]
@@ -154,6 +186,32 @@ mod tests {
         let result = execute_with_timeout(cmd, 99, "pass", "fail", Duration::from_secs(1)).unwrap();
 
         assert_eq!(result.stdout, b"unset:true:0");
+    }
+
+    #[test]
+    fn execute_with_timeout_runs_requested_command() {
+        let mut cmd = Command::new("sh");
+        cmd.arg("-c").arg("printf '%s' \"$0\"");
+
+        let result = execute_with_timeout(cmd, 99, "pass", "fail", Duration::from_secs(1)).unwrap();
+
+        assert_eq!(result.stdout, b"sh");
+    }
+
+    #[test]
+    fn rejects_output_above_limit() {
+        let mut buffer = vec![b'x'; OUTPUT_LIMIT_BYTES];
+        let chunk = [b'y'];
+
+        let result = append_output_chunk(&mut buffer, &chunk, "stdout", OUTPUT_LIMIT_BYTES);
+
+        assert!(matches!(
+            result,
+            Err(ProcessError::OutputLimitExceeded {
+                stream: "stdout",
+                ..
+            })
+        ));
     }
 
     #[test]

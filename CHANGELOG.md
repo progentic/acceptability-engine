@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.19] - 2026-06-04 - Process Isolation Completion
+
+### Added
+- **Sandbox Runner Process** - Gate commands now execute through an internal sandbox runner process boundary instead of being spawned directly by the orchestrator process
+- **Resource Limit Hooks** - Added Unix CPU, address-space, and process-count limits for sandboxed gate commands behind a platform-isolated resource-limit module
+- **Output Capture Limits** - Added per-stream stdout and stderr capture limits so gate output cannot grow without bound in memory or persistence
+- **Process Isolation Coverage** - Added tests for runner-backed command execution and output-limit rejection
+
+### Changed
+- **Gate Command Launch Path** - Centralized sandbox environment, process-group cleanup, timeout metadata, and resource control in the gate process executor
+- **Timeout Cleanup Semantics** - Timeout reporting now remains deterministic even if output reader cleanup observes pipe errors after process termination
+
 ## [0.0.18] - 2026-06-03 - UI Observability
 
 ### Added

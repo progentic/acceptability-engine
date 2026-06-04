@@ -225,6 +225,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "clap",
+ "libc",
  "rusqlite",
  "serde",
  "serde_json",

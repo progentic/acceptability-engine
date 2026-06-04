@@ -39,6 +39,10 @@ struct Args {
 
 #[tokio::main]
 async fn main() {
+    if let Some(exit_code) = run_sandbox_runner() {
+        std::process::exit(exit_code);
+    }
+
     let args = Args::parse();
     let workspace_mode = match workspace_mode::WorkspaceMode::from_env() {
         Ok(mode) => mode,
@@ -121,6 +125,15 @@ async fn main() {
             std::process::exit(3);
         }
     }
+}
+
+fn run_sandbox_runner() -> Option<i32> {
+    let mut args = std::env::args_os();
+    let _binary = args.next();
+    if args.next().as_deref() != Some(std::ffi::OsStr::new(gates::sandbox_runner::RUNNER_FLAG)) {
+        return None;
+    }
+    Some(gates::sandbox_runner::run_from_args(args))
 }
 
 fn read_contract(path: &Path) -> Result<Contract, ContractLoadError> {
