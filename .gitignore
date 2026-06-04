@@ -52,7 +52,12 @@ ehthumbs.db
 
 # Build output for distribution
 /dist/
+**/dist/
 /out/
+
+# Frontend dependencies
+node_modules/
+**/node_modules/
 
 # Backup files
 *.bak

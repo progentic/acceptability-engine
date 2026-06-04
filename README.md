@@ -84,6 +84,27 @@ Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under
 
 `AH_WORKSPACE_MODE=git` is reserved for future clone/fetch materialization and fails during startup until that mode is implemented.
 
+## Browser UI
+
+The repository includes a TypeScript observability UI under `ui/`.
+
+Run the Rust API on port 8080:
+
+```bash
+cd core
+cargo run -- --workspace ../scratch_workspace --database ../evidence.db --port 8080
+```
+
+Run the UI development server:
+
+```bash
+cd ui
+npm install
+npm run dev
+```
+
+The UI proxies `/api` to `http://127.0.0.1:8080` by default. Use the API field in the top bar to point at a different compatible server.
+
 ## License & Attribution
 
 Distributed under the MIT License.
