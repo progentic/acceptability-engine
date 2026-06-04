@@ -47,13 +47,19 @@ No contract field may directly provide an absolute workspace path.
 
 No contract field may cause parent-directory traversal.
 
-## 4. Unsupported workspace modes must fail closed
+## 4. Workspace modes must fail closed
 
-`local` is the only implemented workspace mode.
+`local` and `git` are the implemented workspace modes.
 
 Unset or empty `AH_WORKSPACE_MODE` means local mode.
 
-`git` must fail until Git materialization is implemented.
+`git` mode must materialize the repository under:
+
+```text
+workspace_root / contract.id
+```
+
+Git materialization must validate the contract before clone, reject unsafe roots and symlink workspace targets, clean only the selected per-run workspace path, clone without recursive submodules, disable Git credential prompts, detach `HEAD` at the requested `base_sha`, and verify the configured `origin` URL.
 
 Unknown modes must fail at startup.
 

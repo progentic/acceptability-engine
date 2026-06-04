@@ -20,7 +20,7 @@ Run with Compose:
 docker compose up --build
 ```
 
-The container stores SQLite data in `/data`, evidence artifacts in `/artifacts`, and local Git workspaces in `/workspaces`.
+The container stores SQLite data in `/data`, evidence artifacts in `/artifacts`, and materialized workspaces in `/workspaces`.
 
 ## Kubernetes
 
@@ -42,10 +42,12 @@ Supported roles are `viewer`, `submitter`, `reviewer`, and `admin`.
 
 ## Required Environment
 
-- `AH_WORKSPACE_MODE=local`
+- `AH_WORKSPACE_MODE=local` or `AH_WORKSPACE_MODE=git`
 - `AH_SECURITY_MODE=api-key`
 - `AH_API_KEYS=token|role|tenant|repo_prefixes`
 - `RUST_LOG=core=info`
+
+Use `local` when workspaces already exist under the configured workspace root. Use `git` when the worker should clone the contract repository into the per-run workspace before gate execution.
 
 Optional limits:
 

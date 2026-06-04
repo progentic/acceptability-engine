@@ -2,7 +2,7 @@ use super::security::{SecurityIdentity, SecurityRejection};
 use super::state::AppState;
 use super::worker::RunWork;
 use crate::contract::Contract;
-use crate::error::{StoreError, ValidationError};
+use crate::error::StoreError;
 use crate::store::{
     create_queued_run_for_tenant, fetch_run_summary_for_tenant, finalize_human_review,
     list_attempt_gates_for_tenant, list_run_attempts_for_tenant, list_run_evidence_for_tenant,
@@ -11,14 +11,13 @@ use crate::store::{
     EvidenceBundleSummary, ReviewDecisionId, ReviewDecisionInput, ReviewDecisionKind, RunId,
     RunListItem,
 };
-use crate::workspace_mode::WorkspaceMode;
+use crate::workspace::runtime_workspace_path;
 use axum::{
     extract::{Path as AxumPath, Query, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
 use serde::{Deserialize, Serialize};
-use std::path::{Component, Path, PathBuf};
 
 #[derive(Debug, Serialize)]
 pub struct SubmitResponse {
@@ -53,36 +52,6 @@ fn default_limit() -> u32 {
     50
 }
 
-fn resolve_runtime_workspace(
-    workspace_root: &Path,
-    workspace_mode: WorkspaceMode,
-    contract: &Contract,
-) -> Result<PathBuf, ValidationError> {
-    match workspace_mode {
-        WorkspaceMode::Local => resolve_local_runtime_workspace(workspace_root, contract),
-    }
-}
-
-fn resolve_local_runtime_workspace(
-    workspace_root: &Path,
-    contract: &Contract,
-) -> Result<PathBuf, ValidationError> {
-    if !is_single_workspace_segment(&contract.id) {
-        return Err(ValidationError::WorkspaceEscapesRoot);
-    }
-
-    let runtime_workspace = workspace_root.join(&contract.id);
-    if !runtime_workspace.starts_with(workspace_root) {
-        return Err(ValidationError::WorkspaceEscapesRoot);
-    }
-    Ok(runtime_workspace)
-}
-
-fn is_single_workspace_segment(id: &str) -> bool {
-    let mut components = Path::new(id).components();
-    matches!(components.next(), Some(Component::Normal(_))) && components.next().is_none()
-}
-
 pub async fn submit_contract(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -97,18 +66,10 @@ pub async fn submit_contract(
         ));
     }
 
-    let runtime_workspace =
-        resolve_runtime_workspace(&state.workspace_root, state.workspace_mode, &contract).map_err(
-            |error| {
-                (
-                    StatusCode::BAD_REQUEST,
-                    format!("Runtime workspace validation failed: {}", error),
-                )
-            },
-        )?;
+    validate_runtime_workspace(&state, &contract)?;
 
     let run_id = create_queued_run_record(&state, &contract, &identity).await?;
-    enqueue_contract_run(&state, run_id, contract, runtime_workspace).await?;
+    enqueue_contract_run(&state, run_id, contract).await?;
     state.progress.publisher(run_id).queued();
     state.telemetry.record_submission();
     audit_allowed(&state, &identity, "runs.submit", "run", Some(run_id)).await;
@@ -121,6 +82,20 @@ pub async fn submit_contract(
             reason: None,
         }),
     ))
+}
+
+fn validate_runtime_workspace(
+    state: &AppState,
+    contract: &Contract,
+) -> Result<(), (StatusCode, String)> {
+    runtime_workspace_path(&state.workspace_root, contract)
+        .map(|_| ())
+        .map_err(|error| {
+            (
+                StatusCode::BAD_REQUEST,
+                format!("Runtime workspace validation failed: {}", error),
+            )
+        })
 }
 
 async fn create_queued_run_record(
@@ -141,12 +116,12 @@ async fn enqueue_contract_run(
     state: &AppState,
     run_id: RunId,
     contract: Contract,
-    workspace: PathBuf,
 ) -> Result<(), (StatusCode, String)> {
     let work = RunWork {
         run_id,
         contract,
-        workspace,
+        workspace_root: state.workspace_root.clone(),
+        workspace_mode: state.workspace_mode,
     };
 
     if state.run_queue.try_send(work).is_ok() {
@@ -552,6 +527,8 @@ mod tests {
         create_attempt, create_evidence_bundle, create_queued_run_for_tenant, create_run,
         list_run_attempts, open, record_gate_run, shared_connection, update_run_status,
     };
+    use crate::workspace_mode::WorkspaceMode;
+    use std::path::{Path, PathBuf};
 
     fn contract_with_id(id: &str) -> Contract {
         Contract {
@@ -566,9 +543,7 @@ mod tests {
     #[test]
     fn resolves_runtime_workspace_under_root() {
         let root = Path::new("/tmp/acceptability-workspaces");
-        let workspace =
-            resolve_runtime_workspace(root, WorkspaceMode::Local, &contract_with_id("run-001"))
-                .unwrap();
+        let workspace = runtime_workspace_path(root, &contract_with_id("run-001")).unwrap();
 
         assert_eq!(workspace, root.join("run-001"));
     }
@@ -576,10 +551,9 @@ mod tests {
     #[test]
     fn rejects_runtime_workspace_that_escapes_root() {
         let root = Path::new("/tmp/acceptability-workspaces");
-        let result =
-            resolve_runtime_workspace(root, WorkspaceMode::Local, &contract_with_id("../escape"));
+        let result = runtime_workspace_path(root, &contract_with_id("../escape"));
 
-        assert!(matches!(result, Err(ValidationError::WorkspaceEscapesRoot)));
+        assert!(result.is_err());
     }
 
     #[tokio::test]

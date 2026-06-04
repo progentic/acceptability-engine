@@ -5,6 +5,7 @@ pub const WORKSPACE_MODE_ENV: &str = "AH_WORKSPACE_MODE";
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WorkspaceMode {
     Local,
+    Git,
 }
 
 impl WorkspaceMode {
@@ -15,6 +16,7 @@ impl WorkspaceMode {
     pub fn as_str(self) -> &'static str {
         match self {
             WorkspaceMode::Local => "local",
+            WorkspaceMode::Git => "git",
         }
     }
 }
@@ -22,9 +24,7 @@ impl WorkspaceMode {
 fn workspace_mode_from_value(value: Option<String>) -> Result<WorkspaceMode, ValidationError> {
     match value.as_deref().map(str::trim) {
         None | Some("") | Some("local") => Ok(WorkspaceMode::Local),
-        Some("git") => Err(ValidationError::UnsupportedWorkspaceMode(
-            "git materialization is not implemented yet".to_string(),
-        )),
+        Some("git") => Ok(WorkspaceMode::Git),
         Some(other) => Err(ValidationError::InvalidWorkspaceMode(other.to_string())),
     }
 }
@@ -50,13 +50,11 @@ mod tests {
     }
 
     #[test]
-    fn rejects_git_workspace_mode_until_implemented() {
-        let error = workspace_mode_from_value(Some("git".to_string())).unwrap_err();
-
-        assert!(matches!(
-            error,
-            ValidationError::UnsupportedWorkspaceMode(_)
-        ));
+    fn accepts_git_workspace_mode() {
+        assert_eq!(
+            workspace_mode_from_value(Some("git".to_string())).unwrap(),
+            WorkspaceMode::Git
+        );
     }
 
     #[test]

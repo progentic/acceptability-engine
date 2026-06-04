@@ -230,33 +230,39 @@ Steps
 
 Acceptance Evidence
 
-* clone tests
-* checkout tests
-* cleanup tests
-* malicious path tests
-* detached HEAD validation
-* repository origin validation
+* `AH_WORKSPACE_MODE=git` is accepted during startup.
+* CLI and HTTP worker execution use the same workspace materialization helper.
+* Git mode clones the contract repository into `workspace_root / contract.id`.
+* Git mode cleans only the selected per-run workspace before cloning.
+* Git mode clones without recursive submodules.
+* Git mode rejects unsafe roots and symlink workspace targets before cleanup.
+* Git mode detaches `HEAD` at the requested `base_sha` before gate execution.
+* Git mode verifies `origin` matches the contract repository URL.
+* Tests cover clone, checkout, cleanup, malicious path rejection, unsafe root rejection, symlink rejection, detached HEAD validation, and repository origin validation.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents local and Git workspace modes.
+* `INVARIANTS.md` documents Git materialization safety requirements.
+* `DEPLOYMENT.md` documents `AH_WORKSPACE_MODE=git`.
+* `README.md` documents Git materialization usage.
+* `CHANGELOG.md` records version `0.0.25 - Git Materialization`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Engine can safely materialize repositories.
+Engine can safely materialize repositories into isolated per-run workspaces before gate execution.
 
 Notes / Deviations
+
+* Git mode does not recurse submodules and does not add credential-provider behavior.
 
 =================================
 PHASE 25 ARCHITECTURE REVIEW I

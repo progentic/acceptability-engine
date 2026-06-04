@@ -151,7 +151,7 @@ Gate telemetry artifacts are written to the artifact store before SQLite finaliz
 
 ## Workspace model
 
-The current workspace mode is local.
+The supported workspace modes are local and Git.
 
 In local mode, the runtime workspace is selected as:
 
@@ -161,7 +161,7 @@ workspace_root / contract.id
 
 The contract id must be a single safe path segment. It must not escape the workspace root.
 
-Git materialization is not implemented. `AH_WORKSPACE_MODE=git` must fail until clone, fetch, checkout, cleaning, and repository isolation are implemented.
+In Git mode, the worker materializes the repository into the same runtime workspace path before gate execution. The materializer rejects unsafe roots and symlink workspace targets, cleans any stale per-run workspace, clones the contract repository without recursive submodules, verifies `origin`, and detaches `HEAD` at the requested `base_sha`.
 
 ## Sandbox and execution model
 
@@ -197,7 +197,7 @@ Runtime paths:
 
 Required production environment:
 
-- `AH_WORKSPACE_MODE=local`
+- `AH_WORKSPACE_MODE=local` or `AH_WORKSPACE_MODE=git`
 - `AH_SECURITY_MODE=api-key`
 - `AH_API_KEYS=token|role|tenant|repo_prefixes`
 - `RUST_LOG=core=info`
@@ -222,8 +222,6 @@ Run progress is published as ordered WebSocket events. The progress stream is ob
 ## Non-goals for the current architecture
 
 The current architecture does not make the LLM authoritative.
-
-It does not implement remote Git materialization.
 
 It does not provide a full multi-user identity provider.
 

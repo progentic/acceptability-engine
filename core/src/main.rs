@@ -5,6 +5,7 @@ mod orchestrator;
 mod progress;
 mod server;
 mod store;
+mod workspace;
 mod workspace_mode;
 
 use clap::Parser;
@@ -94,6 +95,10 @@ async fn main() {
             std::process::exit(3);
         }
     };
+    if let Err(error) = contract_payload.validate() {
+        eprintln!("PANIC: Contract structure validation failed: {}", error);
+        std::process::exit(3);
+    }
 
     println!(
         "Orchestrator driving contract validation sequence for: {} in {} workspace mode",
@@ -102,9 +107,20 @@ async fn main() {
     );
 
     let artifact_store = store::ArtifactStore::new(args.artifact_root);
-    match orchestrator::run_contract(shared_db, artifact_store, contract_payload, args.workspace)
-        .await
+    let workspace = match workspace::materialize_workspace(
+        args.workspace,
+        workspace_mode,
+        contract_payload.clone(),
+    )
+    .await
     {
+        Ok(path) => path,
+        Err(error) => {
+            eprintln!("PANIC: Workspace materialization failed: {}", error);
+            std::process::exit(3);
+        }
+    };
+    match orchestrator::run_contract(shared_db, artifact_store, contract_payload, workspace).await {
         Ok(FinalDecision::Approve) => {
             println!("SUCCESS: Contract evaluation approved.");
             std::process::exit(0);

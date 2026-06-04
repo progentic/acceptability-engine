@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.25] - 2026-06-04 - Git Materialization
+
+### Added
+- **Git Workspace Mode** - Added `AH_WORKSPACE_MODE=git` support for cloning contract repositories into per-run workspaces
+- **Workspace Materializer** - Added shared CLI and HTTP worker materialization for local and Git workspace modes
+- **Git Checkout Safety** - Added origin verification, detached HEAD checkout at `base_sha`, credential-prompt disabling, unsafe-root rejection, symlink rejection, and stale workspace cleanup
+- **Git Materialization Coverage** - Added clone, checkout, cleanup, malicious path, unsafe root, symlink, detached HEAD, and origin validation tests
+
+### Changed
+- **CLI Workspace Semantics** - CLI execution now uses the same `workspace_root / contract.id` materialization path as HTTP execution
+- **Workspace Documentation** - Updated architecture, invariants, deployment, phase map, and README documentation for Git mode
+
 ## [0.0.24] - 2026-06-04 - WebSocket Progress Streaming
 
 ### Added

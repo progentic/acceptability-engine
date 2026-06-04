@@ -26,6 +26,4 @@ pub enum ValidationError {
     WorkspaceEscapesRoot,
     #[error("AH_WORKSPACE_MODE has unsupported value: '{0}'")]
     InvalidWorkspaceMode(String),
-    #[error("AH_WORKSPACE_MODE selected a mode that is not available: {0}")]
-    UnsupportedWorkspaceMode(String),
 }

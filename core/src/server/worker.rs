@@ -2,6 +2,8 @@ use crate::contract::Contract;
 use crate::orchestrator::{execute_existing_run, state_machine::FinalDecision};
 use crate::progress::ProgressHub;
 use crate::store::{update_run_status, with_connection, ArtifactStore, RunId, SharedConnection};
+use crate::workspace::materialize_workspace;
+use crate::workspace_mode::WorkspaceMode;
 use std::path::PathBuf;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -12,7 +14,8 @@ pub const RUN_QUEUE_CAPACITY: usize = 64;
 pub struct RunWork {
     pub run_id: RunId,
     pub contract: Contract,
-    pub workspace: PathBuf,
+    pub workspace_root: PathBuf,
+    pub workspace_mode: WorkspaceMode,
 }
 
 pub type RunQueueSender = mpsc::Sender<RunWork>;
@@ -66,19 +69,39 @@ async fn process_run_work(
     work: RunWork,
 ) {
     let run_id = work.run_id;
+    let workspace = match materialize_run_workspace(&work).await {
+        Ok(workspace) => workspace,
+        Err(error) => {
+            publish_internal_failure(&progress, run_id);
+            mark_run_failed_internal(&db, run_id).await;
+            tracing::error!(run_id = run_id.get(), error = %error, "workspace materialization failed");
+            return;
+        }
+    };
     let result = execute_existing_run(
         db.clone(),
         artifact_store,
         progress.publisher(run_id),
         work.run_id,
         work.contract,
-        work.workspace,
+        workspace,
     )
     .await;
     if should_mark_internal_failure(&result) {
         publish_internal_failure(&progress, run_id);
         mark_run_failed_internal(&db, run_id).await;
     }
+}
+
+async fn materialize_run_workspace(
+    work: &RunWork,
+) -> Result<PathBuf, crate::workspace::WorkspaceMaterializationError> {
+    materialize_workspace(
+        work.workspace_root.clone(),
+        work.workspace_mode,
+        work.contract.clone(),
+    )
+    .await
 }
 
 fn should_mark_internal_failure(
@@ -117,7 +140,8 @@ mod tests {
                 scopes: vec!["core/src".to_string()],
                 requires_human_review: false,
             },
-            workspace: PathBuf::from("/tmp/run-001"),
+            workspace_root: PathBuf::from("/tmp"),
+            workspace_mode: WorkspaceMode::Local,
         };
 
         sender.send(work).await.unwrap();

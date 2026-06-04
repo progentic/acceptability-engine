@@ -78,11 +78,11 @@ This repository is Pre-Alpha software and is under active development. For a com
 
 ## Workspace Mode
 
-The engine currently supports explicit local workspace materialization only.
+The engine supports explicit local workspace selection and Git materialization.
 
 Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under the configured `--workspace` root. Each contract ID resolves to a single child directory under that root, and Gate 2 verifies that directory is a local Git work tree with the requested `base_sha`.
 
-`AH_WORKSPACE_MODE=git` is reserved for future clone/fetch materialization and fails during startup until that mode is implemented.
+Set `AH_WORKSPACE_MODE=git` to clone the contract repository into `--workspace/<contract-id>` before gate execution. Git mode cleans the selected per-run workspace, clones without recursive submodules, verifies `origin`, detaches `HEAD`, and verifies the requested `base_sha`.
 
 ## Browser UI
 
