@@ -1,6 +1,7 @@
 use super::security::TrustControls;
 use super::telemetry::MetricsState;
 use super::worker::RunQueueSender;
+use crate::progress::ProgressHub;
 use crate::store::SharedConnection;
 use crate::workspace_mode::WorkspaceMode;
 use std::path::PathBuf;
@@ -13,4 +14,5 @@ pub struct AppState {
     pub workspace_mode: WorkspaceMode,
     pub trust: TrustControls,
     pub telemetry: MetricsState,
+    pub progress: ProgressHub,
 }

@@ -4,7 +4,8 @@ pub mod state_machine;
 use crate::contract::Contract;
 use crate::error::OrchestratorError;
 use crate::gates::result::GateOutput;
-use crate::gates::runner::run_gates_sequential;
+use crate::gates::runner::run_gates_sequential_with_progress;
+use crate::progress::ProgressPublisher;
 use crate::store::{
     create_attempt, create_evidence_bundle, create_run, record_final_decision, record_gate_run,
     update_attempt_status, update_run_status, with_connection, with_transaction, ArtifactStore,
@@ -23,21 +24,32 @@ pub async fn run_contract(
     workspace: PathBuf,
 ) -> Result<FinalDecision, OrchestratorError> {
     let run_id = create_run_record(&db, &contract).await?;
-    execute_existing_run(db, artifact_store, run_id, contract, workspace).await
+    execute_existing_run(
+        db,
+        artifact_store,
+        ProgressPublisher::disabled(),
+        run_id,
+        contract,
+        workspace,
+    )
+    .await
 }
 
 pub async fn execute_existing_run(
     db: SharedConnection,
     artifact_store: ArtifactStore,
+    progress: ProgressPublisher,
     run_id: RunId,
     contract: Contract,
     workspace: PathBuf,
 ) -> Result<FinalDecision, OrchestratorError> {
     mark_run_running(&db, run_id).await?;
+    progress.started();
     let attempt_id = create_run_attempt(&db, run_id).await?;
+    progress.attempt_started(attempt_id);
     let requires_human_review = contract.requires_human_review;
     let run_context = build_run_context(contract, workspace);
-    let gate_outputs = match run_gates_sequential(&run_context).await {
+    let gate_outputs = match run_gates_sequential_with_progress(&run_context, &progress).await {
         Ok(outputs) => outputs,
         Err(error) => {
             finalize_internal_error(&db, run_id, attempt_id).await?;
@@ -55,6 +67,7 @@ pub async fn execute_existing_run(
         &final_decision,
     )
     .await?;
+    progress.finalized(final_status(&final_decision));
 
     Ok(final_decision)
 }

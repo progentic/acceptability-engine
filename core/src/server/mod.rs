@@ -1,10 +1,12 @@
 pub mod handlers;
 pub mod health;
+pub mod progress_ws;
 pub mod security;
 pub mod state;
 pub mod telemetry;
 pub mod worker;
 
+use crate::progress::ProgressHub;
 use crate::store::{ArtifactStore, SharedConnection};
 use crate::workspace_mode::WorkspaceMode;
 use axum::{
@@ -27,7 +29,8 @@ pub async fn run_server(
 ) -> Result<(), std::io::Error> {
     let (sender, receiver) = run_queue();
     let artifact_store = ArtifactStore::new(artifact_root);
-    let worker = spawn_run_worker(db.clone(), artifact_store, receiver);
+    let progress = ProgressHub::new();
+    let worker = spawn_run_worker(db.clone(), artifact_store, progress.clone(), receiver);
     let trust = security::TrustControls::from_env().map_err(std::io::Error::other)?;
     let telemetry = MetricsState::new();
     let state = AppState {
@@ -37,6 +40,7 @@ pub async fn run_server(
         workspace_mode,
         trust,
         telemetry: telemetry.clone(),
+        progress,
     };
 
     let app = Router::new()
@@ -64,6 +68,7 @@ pub async fn run_server(
             "/runs/:id/review/reject",
             post(handlers::reject_run_review_handler),
         )
+        .route("/runs/:id/progress", get(progress_ws::run_progress_handler))
         .route(
             "/attempts/:id/gates",
             get(handlers::list_attempt_gates_handler),

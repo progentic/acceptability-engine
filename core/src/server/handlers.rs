@@ -109,6 +109,7 @@ pub async fn submit_contract(
 
     let run_id = create_queued_run_record(&state, &contract, &identity).await?;
     enqueue_contract_run(&state, run_id, contract, runtime_workspace).await?;
+    state.progress.publisher(run_id).queued();
     state.telemetry.record_submission();
     audit_allowed(&state, &identity, "runs.submit", "run", Some(run_id)).await;
 
@@ -796,6 +797,7 @@ mod tests {
             workspace_mode: WorkspaceMode::Local,
             trust,
             telemetry: super::super::telemetry::MetricsState::new(),
+            progress: crate::progress::ProgressHub::new(),
         }
     }
 

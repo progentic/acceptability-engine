@@ -168,31 +168,39 @@ Steps
 
 Acceptance Evidence
 
-* websocket integration tests
-* event ordering validation
-* reconnect validation
-* live run demonstration
-* telemetry event inventory
+* `GET /runs/:id/progress` upgrades to a WebSocket stream.
+* Progress events include ordered `sequence`, `run_id`, `created_at`, and event type fields.
+* Event inventory covers `queued`, `started`, `attempt_started`, `gate_started`, `gate_finished`, `finalized`, and `failed_internal`.
+* Gate execution publishes start and finish events in sequential gate order.
+* Reconnect replay supports `?after=<sequence>` against the recent bounded in-memory event buffer.
+* WebSocket integration test validates replay plus live event delivery over a local Axum listener.
+* Progress hub tests validate event ordering and replay filtering.
+* The TypeScript API client exposes a typed progress WebSocket connection.
+* The browser dashboard subscribes to the selected live run and refreshes on progress events.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* API documentation
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents the progress stream and reconnect behavior.
+* `INVARIANTS.md` records that progress streams are observational only.
+* `API.md` documents the WebSocket route, replay query, and event inventory.
+* `CHANGELOG.md` records version `0.0.24 - WebSocket Progress Streaming`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
+* `npm run build`
 
 Summary
 
-Operators receive live execution visibility.
+Operators receive live execution visibility through ordered, reconnectable WebSocket progress events.
 
 Notes / Deviations
+
+* Progress replay is a bounded in-memory reconnect aid. If older events age out, clients continue from available events and durable evidence remains in SQLite and filesystem artifacts.
 
 ==============================
 PHASE 24 GIT MATERIALIZATION

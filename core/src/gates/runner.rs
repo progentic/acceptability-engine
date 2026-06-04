@@ -1,65 +1,83 @@
 use crate::error::GateError;
 use crate::gates::result::GateOutput;
 use crate::orchestrator::state_machine::Run;
+use crate::progress::ProgressPublisher;
 
-pub async fn run_gates_sequential(run: &Run) -> Result<Vec<GateOutput>, GateError> {
+pub async fn run_gates_sequential_with_progress(
+    run: &Run,
+    progress: &ProgressPublisher,
+) -> Result<Vec<GateOutput>, GateError> {
     let mut results = Vec::with_capacity(8);
 
+    progress.gate_started(1);
     let res1 = super::gate01_contract::run(run).await?;
-    let passed1 = res1.passed;
-    results.push(GateOutput::Simple(res1));
-    if !passed1 {
+    let output1 = GateOutput::Simple(res1);
+    progress.gate_finished(&output1);
+    if push_and_should_stop(&mut results, output1) {
         return Ok(results);
     }
 
+    progress.gate_started(2);
     let res2 = super::gate02_workspace::run(run).await?;
-    let passed2 = res2.passed;
-    results.push(GateOutput::Simple(res2));
-    if !passed2 {
+    let output2 = GateOutput::Simple(res2);
+    progress.gate_finished(&output2);
+    if push_and_should_stop(&mut results, output2) {
         return Ok(results);
     }
 
+    progress.gate_started(3);
     let res3 = super::gate03_boundary::run(run).await?;
-    let passed3 = res3.passed;
-    results.push(GateOutput::Simple(res3));
-    if !passed3 {
+    let output3 = GateOutput::Simple(res3);
+    progress.gate_finished(&output3);
+    if push_and_should_stop(&mut results, output3) {
         return Ok(results);
     }
 
+    progress.gate_started(4);
     let res4 = super::gate04_formatting::run(run).await?;
-    let passed4 = res4.base.passed;
-    results.push(GateOutput::Execution(res4));
-    if !passed4 {
+    let output4 = GateOutput::Execution(res4);
+    progress.gate_finished(&output4);
+    if push_and_should_stop(&mut results, output4) {
         return Ok(results);
     }
 
+    progress.gate_started(5);
     let res5 = super::gate05_static_checks::run(run).await?;
-    let passed5 = res5.base.passed;
-    results.push(GateOutput::Execution(res5));
-    if !passed5 {
+    let output5 = GateOutput::Execution(res5);
+    progress.gate_finished(&output5);
+    if push_and_should_stop(&mut results, output5) {
         return Ok(results);
     }
 
+    progress.gate_started(6);
     let res6 = super::gate06_build::run(run).await?;
-    let passed6 = res6.base.passed;
-    results.push(GateOutput::Execution(res6));
-    if !passed6 {
+    let output6 = GateOutput::Execution(res6);
+    progress.gate_finished(&output6);
+    if push_and_should_stop(&mut results, output6) {
         return Ok(results);
     }
 
+    progress.gate_started(7);
     let res7 = super::gate07_tests::run(run).await?;
-    let passed7 = res7.base.passed;
-    results.push(GateOutput::Execution(res7));
-    if !passed7 {
+    let output7 = GateOutput::Execution(res7);
+    progress.gate_finished(&output7);
+    if push_and_should_stop(&mut results, output7) {
         return Ok(results);
     }
 
+    progress.gate_started(8);
     let res8 = super::gate08_supply_chain::run(run).await?;
-    let passed8 = res8.base.passed;
-    results.push(GateOutput::Execution(res8));
-    if !passed8 {
+    let output8 = GateOutput::Execution(res8);
+    progress.gate_finished(&output8);
+    if push_and_should_stop(&mut results, output8) {
         return Ok(results);
     }
 
     Ok(results)
+}
+
+fn push_and_should_stop(results: &mut Vec<GateOutput>, output: GateOutput) -> bool {
+    let should_stop = !output.passed();
+    results.push(output);
+    should_stop
 }

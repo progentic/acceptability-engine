@@ -2,6 +2,7 @@ mod contract;
 mod error;
 mod gates;
 mod orchestrator;
+mod progress;
 mod server;
 mod store;
 mod workspace_mode;

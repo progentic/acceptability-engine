@@ -5,6 +5,7 @@ import type {
   EvidenceBundleSummary,
   ReviewDecisionRequest,
   ReviewDecisionResponse,
+  RunProgressEvent,
   RunDetail,
   RunListItem,
   RunStatus,
@@ -71,6 +72,15 @@ export class ApiClient {
     return { summary, attempts, gates, evidence };
   }
 
+  openRunProgress(runId: number, after?: number): WebSocket {
+    const query = new URLSearchParams();
+    if (after !== undefined) {
+      query.set("after", String(after));
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return new WebSocket(this.websocketUrl(`/runs/${runId}/progress${suffix}`));
+  }
+
   private async listLatestAttemptGates(
     attempts: AttemptSummary[],
   ): Promise<AttemptGateDetail[]> {
@@ -98,6 +108,16 @@ export class ApiClient {
   private url(path: string): string {
     return `${this.baseUrl}${path}`;
   }
+
+  private websocketUrl(path: string): string {
+    const url = new URL(this.url(path), window.location.href);
+    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    return url.toString();
+  }
+}
+
+export function parseRunProgressEvent(payload: string): RunProgressEvent {
+  return JSON.parse(payload) as RunProgressEvent;
 }
 
 async function readJson<T>(response: Response): Promise<T> {

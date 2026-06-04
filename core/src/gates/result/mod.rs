@@ -49,4 +49,11 @@ impl GateOutput {
             Self::Execution(result) => result.base.gate_num,
         }
     }
+
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Simple(result) => &result.message,
+            Self::Execution(result) => &result.base.message,
+        }
+    }
 }

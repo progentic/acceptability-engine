@@ -83,6 +83,26 @@ export interface RunDetail {
   evidence: EvidenceBundleSummary[];
 }
 
+export type RunProgressEvent =
+  | BaseProgressEvent<"queued">
+  | BaseProgressEvent<"started">
+  | (BaseProgressEvent<"attempt_started"> & { attempt_id: number })
+  | (BaseProgressEvent<"gate_started"> & { gate_num: number })
+  | (BaseProgressEvent<"gate_finished"> & {
+      gate_num: number;
+      passed: boolean;
+      message: string;
+    })
+  | (BaseProgressEvent<"finalized"> & { status: RunStatus })
+  | (BaseProgressEvent<"failed_internal"> & { reason: string });
+
+export interface BaseProgressEvent<T extends string> {
+  sequence: number;
+  run_id: number;
+  created_at: number;
+  type: T;
+}
+
 export interface ReviewDecisionRequest {
   reason: string;
 }

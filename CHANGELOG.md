@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.24] - 2026-06-04 - WebSocket Progress Streaming
+
+### Added
+- **Progress Event Hub** - Added ordered run progress events with bounded replay for reconnecting clients
+- **Progress WebSocket** - Added `GET /runs/:id/progress` for live run visibility over WebSocket
+- **Gate Progress Events** - Added queued, started, attempt started, gate started, gate finished, finalized, and failed-internal progress event types
+- **Progress Reconnect Support** - Added `?after=<sequence>` replay for recent run progress events
+- **Progress UI Surface** - Added typed TypeScript progress events, a WebSocket API client method, and selected-run live refresh
+- **Progress Coverage** - Added event ordering, replay filtering, and WebSocket integration coverage
+
+### Changed
+- **Observability Contract** - Documented progress streams as observational signals that do not mutate run state or replace durable evidence
+
 ## [0.0.23] - 2026-06-04 - Human Review Authority
 
 ### Added

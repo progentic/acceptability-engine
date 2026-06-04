@@ -184,7 +184,15 @@ Authentication failures, authorization failures, rate limit failures, quota fail
 
 Audit events must include outcome and reason.
 
-## 17. Queues are bounded
+## 17. Progress streams are observational
+
+WebSocket progress events may report current run execution state.
+
+Progress events must not create, approve, reject, retry, cancel, or otherwise mutate runs.
+
+Reconnect replay is an operator visibility aid. Durable evidence remains in SQLite and the artifact store.
+
+## 18. Queues are bounded
 
 The run queue must remain bounded.
 
@@ -192,13 +200,13 @@ If work cannot be queued, the run must not silently disappear.
 
 A run that was created but cannot be queued must be marked as failed internal or returned as unavailable through a clear error path.
 
-## 18. Blocking work must not block async executor threads
+## 19. Blocking work must not block async executor threads
 
 SQLite access, Git commands, Cargo commands, filesystem-heavy work, and other blocking operations must run through blocking boundaries.
 
 Async request handlers and worker futures must not hold synchronous locks or perform blocking process execution directly.
 
-## 19. Process output is bounded
+## 20. Process output is bounded
 
 Gate stdout and stderr capture must have a hard size limit.
 
@@ -206,7 +214,7 @@ Oversized output is an engine-visible failure condition.
 
 Read APIs may return previews, but they must expose truncation flags when previews are shortened.
 
-## 20. Gate command environment is controlled
+## 21. Gate command environment is controlled
 
 Gate commands must not inherit the caller environment by default.
 
@@ -214,7 +222,7 @@ The gate process environment must clear inherited variables and set only the req
 
 Network-dependent Cargo and Git behavior must be disabled unless a later design explicitly adds controlled network access.
 
-## 21. Timeouts are mandatory for external commands
+## 22. Timeouts are mandatory for external commands
 
 Every external gate command must have a timeout.
 
@@ -222,7 +230,7 @@ Timeout cleanup must terminate the process and descendants where the platform su
 
 A timeout must not be interpreted as a passing gate.
 
-## 22. The change boundary is scope-based
+## 23. The change boundary is scope-based
 
 Gate 3 must compare changed files from `base_sha` to `HEAD`.
 
@@ -230,7 +238,7 @@ Every changed file must fall under one of the contract scopes.
 
 A path such as `src/api_backup/file.rs` must not match scope `src/api`.
 
-## 23. Supply-chain checks are part of admission
+## 24. Supply-chain checks are part of admission
 
 The supply-chain gate is part of the admission sequence.
 
@@ -238,7 +246,7 @@ The supply-chain gate is part of the admission sequence.
 
 A failed supply-chain command rejects the run.
 
-## 24. Metrics are operational signals, not authority
+## 25. Metrics are operational signals, not authority
 
 Prometheus metrics and logs may help operators understand the system.
 
@@ -246,7 +254,7 @@ They do not determine run status.
 
 Durable store state and evidence records are the authoritative record.
 
-## 25. The UI is non-authoritative
+## 26. The UI is non-authoritative
 
 The browser UI may call API endpoints and render their responses.
 
@@ -254,7 +262,7 @@ The UI must not synthesize gate results, rewrite statuses, suppress failures, or
 
 Polling is an observation mechanism. It is not a state transition mechanism.
 
-## 26. API response models must remain explicit
+## 27. API response models must remain explicit
 
 Public API models must use explicit fields.
 
@@ -262,25 +270,25 @@ Do not return unstructured blobs when the domain has known fields.
 
 Typed identifiers should not be interchangeable inside Rust code.
 
-## 27. Migrations must preserve existing evidence
+## 28. Migrations must preserve existing evidence
 
 Schema changes must preserve existing contracts, runs, attempts, gate records, evidence bundles, final decisions, and audit events unless a deliberate destructive migration is documented.
 
 Legacy migration code must attach old gate rows to deterministic attempt records.
 
-## 28. Tests must cover negative paths
+## 29. Tests must cover negative paths
 
 Any new authority path requires tests for failure behavior.
 
 At minimum, tests should cover invalid input, denied authorization, missing records, failed gates, and internal error behavior when that path can produce those outcomes.
 
-## 29. Documentation must match executable behavior
+## 30. Documentation must match executable behavior
 
 Architecture and invariant documentation must be updated when the gate sequence, API surface, state model, workspace model, security model, or persistence model changes.
 
 The README must not claim a capability that the code fails closed on.
 
-## 30. Coding style is part of the architecture
+## 31. Coding style is part of the architecture
 
 Code must follow `docs/CODING_STYLE.md`.
 

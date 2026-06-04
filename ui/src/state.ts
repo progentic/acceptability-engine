@@ -11,6 +11,9 @@ export interface AppState {
   loading: boolean;
   error: string | null;
   lastUpdated: Date | null;
+  progressSocket: WebSocket | null;
+  progressRunId: number | null;
+  progressSequences: Record<number, number>;
 }
 
 export function createState(apiBase: string): AppState {
@@ -24,6 +27,9 @@ export function createState(apiBase: string): AppState {
     loading: false,
     error: null,
     lastUpdated: null,
+    progressSocket: null,
+    progressRunId: null,
+    progressSequences: {},
   };
 }
 

@@ -1,3 +1,4 @@
+import { parseRunProgressEvent } from "./api";
 import { byId, setText } from "./dom";
 import { isLiveStatus } from "./format";
 import type { ContractSubmission, RunStatus } from "./models";
@@ -29,6 +30,7 @@ function bindEvents(appState: AppState): void {
 }
 
 async function reconnect(appState: AppState): Promise<void> {
+  closeProgressSocket(appState);
   appState.apiBase = byId<HTMLInputElement>("api-base").value.trim() || "/api";
   appState.api = createState(appState.apiBase).api;
   await refreshRuns(appState);
@@ -82,11 +84,59 @@ async function syncSelectedRun(appState: AppState): Promise<void> {
     return;
   }
   if (!isLiveStatus(selected.status) && appState.selectedRun?.summary.run_id === selected.run_id) {
+    closeProgressSocket(appState);
     render(appState);
     return;
   }
   appState.selectedRun = await appState.api.getRunDetail(selected.run_id);
+  syncProgressSocket(appState, selected.run_id, selected.status);
   render(appState);
+}
+
+function syncProgressSocket(appState: AppState, runId: number, status: RunStatus): void {
+  if (!isLiveStatus(status)) {
+    closeProgressSocket(appState);
+    return;
+  }
+  if (appState.progressRunId === runId && appState.progressSocket) {
+    return;
+  }
+  closeProgressSocket(appState);
+  appState.progressRunId = runId;
+  appState.progressSocket = appState.api.openRunProgress(
+    runId,
+    appState.progressSequences[runId],
+  );
+  const socket = appState.progressSocket;
+  appState.progressSocket.addEventListener("message", (event) =>
+    handleProgressEvent(appState, event),
+  );
+  appState.progressSocket.addEventListener("close", () =>
+    clearClosedProgressSocket(appState, socket),
+  );
+}
+
+function handleProgressEvent(appState: AppState, event: MessageEvent<string>): void {
+  const progress = parseRunProgressEvent(event.data);
+  appState.progressSequences[progress.run_id] = Math.max(
+    appState.progressSequences[progress.run_id] ?? 0,
+    progress.sequence,
+  );
+  void refreshRuns(appState);
+}
+
+function closeProgressSocket(appState: AppState): void {
+  appState.progressSocket?.close();
+  appState.progressSocket = null;
+  appState.progressRunId = null;
+}
+
+function clearClosedProgressSocket(appState: AppState, socket: WebSocket): void {
+  if (appState.progressSocket !== socket) {
+    return;
+  }
+  appState.progressSocket = null;
+  appState.progressRunId = null;
 }
 
 async function runRequest(appState: AppState, operation: () => Promise<void>): Promise<void> {

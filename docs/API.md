@@ -80,6 +80,55 @@ GET /runs/:id/evidence
 
 Evidence rows may include `review_decision_id` when the evidence was produced by a human review decision.
 
+### Stream Run Progress
+
+```text
+GET /runs/:id/progress
+```
+
+This endpoint upgrades to a WebSocket connection.
+
+Optional query:
+
+```text
+after=42
+```
+
+When `after` is present, the server replays recent events for that run with a higher sequence number before streaming live events.
+
+Replay is bounded in memory. If older events have aged out, the server streams the available newer events and then continues with live events. Durable evidence remains available through the run, attempt, gate, and evidence read endpoints.
+
+Events share this envelope:
+
+```json
+{
+  "sequence": 1,
+  "run_id": 1,
+  "created_at": 1780545600,
+  "type": "gate_started"
+}
+```
+
+Event types:
+
+- `queued`
+- `started`
+- `attempt_started`
+- `gate_started`
+- `gate_finished`
+- `finalized`
+- `failed_internal`
+
+`attempt_started` includes `attempt_id`.
+
+`gate_started` includes `gate_num`.
+
+`gate_finished` includes `gate_num`, `passed`, and `message`.
+
+`finalized` includes `status`.
+
+`failed_internal` includes `reason`.
+
 ## Attempts
 
 ### List Attempt Gates

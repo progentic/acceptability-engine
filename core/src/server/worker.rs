@@ -1,5 +1,6 @@
 use crate::contract::Contract;
 use crate::orchestrator::{execute_existing_run, state_machine::FinalDecision};
+use crate::progress::ProgressHub;
 use crate::store::{update_run_status, with_connection, ArtifactStore, RunId, SharedConnection};
 use std::path::PathBuf;
 use tokio::sync::mpsc;
@@ -38,10 +39,11 @@ pub fn run_queue() -> (RunQueueSender, RunQueueReceiver) {
 pub fn spawn_run_worker(
     db: SharedConnection,
     artifact_store: ArtifactStore,
+    progress: ProgressHub,
     receiver: RunQueueReceiver,
 ) -> RunWorker {
     let handle = tokio::spawn(async move {
-        process_run_queue(db, artifact_store, receiver).await;
+        process_run_queue(db, artifact_store, progress, receiver).await;
     });
     RunWorker { handle }
 }
@@ -49,24 +51,32 @@ pub fn spawn_run_worker(
 async fn process_run_queue(
     db: SharedConnection,
     artifact_store: ArtifactStore,
+    progress: ProgressHub,
     mut receiver: RunQueueReceiver,
 ) {
     while let Some(work) = receiver.recv().await {
-        process_run_work(db.clone(), artifact_store.clone(), work).await;
+        process_run_work(db.clone(), artifact_store.clone(), progress.clone(), work).await;
     }
 }
 
-async fn process_run_work(db: SharedConnection, artifact_store: ArtifactStore, work: RunWork) {
+async fn process_run_work(
+    db: SharedConnection,
+    artifact_store: ArtifactStore,
+    progress: ProgressHub,
+    work: RunWork,
+) {
     let run_id = work.run_id;
     let result = execute_existing_run(
         db.clone(),
         artifact_store,
+        progress.publisher(run_id),
         work.run_id,
         work.contract,
         work.workspace,
     )
     .await;
     if should_mark_internal_failure(&result) {
+        publish_internal_failure(&progress, run_id);
         mark_run_failed_internal(&db, run_id).await;
     }
 }
@@ -75,6 +85,12 @@ fn should_mark_internal_failure(
     result: &Result<FinalDecision, crate::error::OrchestratorError>,
 ) -> bool {
     result.is_err()
+}
+
+fn publish_internal_failure(progress: &ProgressHub, run_id: RunId) {
+    progress
+        .publisher(run_id)
+        .failed_internal("engine error during run execution");
 }
 
 pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: RunId) {
@@ -87,6 +103,7 @@ pub async fn mark_run_failed_internal(db: &SharedConnection, run_id: RunId) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::progress::{ProgressHub, RunProgressKind};
 
     #[tokio::test]
     async fn creates_bounded_run_queue() {
@@ -114,5 +131,20 @@ mod tests {
         let result = Ok(FinalDecision::PendingHumanReview);
 
         assert!(!should_mark_internal_failure(&result));
+    }
+
+    #[test]
+    fn internal_failure_progress_is_published_once() {
+        let progress = ProgressHub::new();
+        let run_id = RunId::new(1);
+
+        publish_internal_failure(&progress, run_id);
+
+        let events = progress.replay(run_id, 0);
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0].event,
+            RunProgressKind::FailedInternal { .. }
+        ));
     }
 }
