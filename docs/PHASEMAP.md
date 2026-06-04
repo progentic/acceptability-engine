@@ -292,32 +292,39 @@ Steps
 
 Acceptance Evidence
 
-* architecture review report
-* invariant compliance report
-* API inventory
-* persistence inventory
-* deviation register
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the architecture review report.
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the invariant compliance report.
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the API inventory.
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the persistence inventory.
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the deviation register.
+* `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md` contains the roadmap impact assessment.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* PHASEMAP.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` links to the Phase 25 review record.
+* `INVARIANTS.md` links to the Phase 25 compliance review record.
+* `PHASEMAP.md` records Phase 25 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.26 - Architecture Review I`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Architecture remains aligned.
+Architecture remains aligned with documented Phase 25 deviations.
 
 Notes / Deviations
+
+* `D25-001` remains open: Git mode materializes `base_sha` but does not yet model candidate-change acquisition.
+* `D25-002` remains open: process execution is hardened but not a complete adversarial kernel sandbox.
+* `D25-003` is an accepted limitation: WebSocket replay is bounded and in memory.
+* `D25-004` is an accepted limitation: API-key security does not include external identity providers.
+* Phase 25 roadmap impact assessment identifies where deviations must be rechecked before v1.0.
 
 =================================
 PHASE 26 MULTI-TENANT HARDENING

@@ -301,3 +301,8 @@ Code must follow `docs/CODING_STYLE.md`.
 Authority code should use clear names, small functions, explicit state, typed errors, guard clauses, and direct control flow.
 
 Avoid hidden state, unnecessary abstraction, deep nesting, swallowed errors, unbounded spawning, and blocking async executor paths.
+
+## Compliance review record
+
+Phase 25 invariant compliance evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
+That report is review evidence; this document remains the invariant authority.

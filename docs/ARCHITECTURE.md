@@ -219,6 +219,11 @@ Durable audit events record tenant, actor, role, action, resource type, resource
 
 Run progress is published as ordered WebSocket events. The progress stream is observational only. It reports queueing, run start, attempt start, gate start, gate finish, finalization, and internal failure events. Clients may reconnect with the last received sequence number to replay recent events from the bounded in-memory progress buffer. If older progress events have aged out, durable evidence remains available through the read APIs.
 
+## Architecture review record
+
+Phase 25 review evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
+That report is review evidence; this document remains the architecture authority.
+
 ## Non-goals for the current architecture
 
 The current architecture does not make the LLM authoritative.
