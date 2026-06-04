@@ -1,11 +1,19 @@
 FROM rust:1-bookworm AS builder
 
+ARG CARGO_BUILD_JOBS=1
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+ENV CARGO_INCREMENTAL=0
+
 WORKDIR /src
 COPY core ./core
 WORKDIR /src/core
 RUN cargo build --release
 
 FROM rust:1-bookworm AS runtime
+
+ARG CARGO_BUILD_JOBS=1
+ENV CARGO_BUILD_JOBS=${CARGO_BUILD_JOBS}
+ENV CARGO_INCREMENTAL=0
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config libssl-dev \

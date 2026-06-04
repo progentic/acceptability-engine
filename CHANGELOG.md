@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.22] - 2026-06-04 - CI Build Stabilization
+
+### Added
+- **GitHub CI Workflow** - Added cacheless GitHub Actions coverage for Rust formatting, clippy, tests, UI build, Docker image build, Compose validation, and Kubernetes manifest validation
+- **Low-Memory CI Settings** - Added one-job Cargo build settings in CI so temporary runners do not rely on cache or high memory availability
+
+### Changed
+- **Docker Build Controls** - Docker builds now accept `CARGO_BUILD_JOBS` and disable incremental compilation to make runtime image builds more predictable on ephemeral CI runners
+
 ## [0.0.21] - 2026-06-04 - Deployment Foundation
 
 ### Added
