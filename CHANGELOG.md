@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.21] - 2026-06-04 - Deployment Foundation
+
+### Added
+- **Health Probes** - Added `/health/live` and `/health/ready` endpoints for process and SQLite readiness checks
+- **Prometheus Metrics** - Added `/metrics` with request, response, submission, security-denial, and uptime counters
+- **Structured Tracing** - Added `tracing` initialization and per-request HTTP completion logs controlled by `RUST_LOG`
+- **Container Runtime** - Added a Dockerfile and Compose file with persistent data, artifacts, workspace mounts, and HTTP health checks
+- **Kubernetes Manifests** - Added namespace, secret, PVC, deployment, probes, resource limits, and service definitions under `deploy/`
+- **Deployment Documentation** - Added deployment notes covering probes, metrics, container usage, Kubernetes, and required environment variables
+
+### Changed
+- **Server Startup** - HTTP server startup now wires telemetry state into app state and records request metrics through middleware
+- **Submission Observability** - Accepted submissions and security denials now increment runtime counters in addition to durable audit rows
+
 ## [0.0.20] - 2026-06-04 - Security Trust Foundation
 
 ### Added

@@ -7,6 +7,7 @@ mod evidence;
 mod evidence_reads;
 mod final_decisions;
 mod gate_records;
+mod health;
 mod mappers;
 mod queries;
 mod runs;
@@ -28,6 +29,7 @@ pub use evidence_reads::list_run_evidence;
 pub use evidence_reads::list_run_evidence_for_tenant;
 pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
+pub use health::check_store_ready;
 #[cfg(test)]
 pub use queries::{fetch_run_summary, list_runs};
 pub use queries::{fetch_run_summary_for_tenant, list_runs_for_tenant};

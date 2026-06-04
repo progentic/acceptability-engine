@@ -1,0 +1,8 @@
+.git
+core/target
+ui/node_modules
+ui/dist
+data
+artifacts
+workspaces
+*.db

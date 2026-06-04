@@ -105,6 +105,12 @@ npm run dev
 
 The UI proxies `/api` to `http://127.0.0.1:8080` by default. Use the API field in the top bar to point at a different compatible server.
 
+## Deployment
+
+Deployment assets are under `Dockerfile`, `compose.yaml`, and `deploy/kubernetes.yaml`.
+
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for health probes, metrics, container runtime, Kubernetes, and production environment settings.
+
 ## License & Attribution
 
 Distributed under the MIT License.

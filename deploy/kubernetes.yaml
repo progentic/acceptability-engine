@@ -1,0 +1,130 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: acceptability-engine
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: acceptability-engine-secrets
+  namespace: acceptability-engine
+type: Opaque
+stringData:
+  AH_API_KEYS: "replace-me|admin|default|*"
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acceptability-engine-data
+  namespace: acceptability-engine
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: acceptability-engine-artifacts
+  namespace: acceptability-engine
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: acceptability-engine
+  namespace: acceptability-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: acceptability-engine
+  template:
+    metadata:
+      labels:
+        app: acceptability-engine
+    spec:
+      containers:
+        - name: api
+          image: ghcr.io/progentic/acceptability-engine:latest
+          imagePullPolicy: IfNotPresent
+          args:
+            - "--workspace"
+            - "/workspaces"
+            - "--database"
+            - "/data/evidence.db"
+            - "--artifact-root"
+            - "/artifacts"
+            - "--port"
+            - "8080"
+          env:
+            - name: AH_WORKSPACE_MODE
+              value: local
+            - name: AH_SECURITY_MODE
+              value: api-key
+            - name: AH_API_KEYS
+              valueFrom:
+                secretKeyRef:
+                  name: acceptability-engine-secrets
+                  key: AH_API_KEYS
+            - name: RUST_LOG
+              value: core=info
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: artifacts
+              mountPath: /artifacts
+            - name: workspaces
+              mountPath: /workspaces
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: acceptability-engine-data
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: acceptability-engine-artifacts
+        - name: workspaces
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: acceptability-engine
+  namespace: acceptability-engine
+spec:
+  type: ClusterIP
+  selector:
+    app: acceptability-engine
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

@@ -11,6 +11,7 @@ use contract::Contract;
 use error::ContractLoadError;
 use orchestrator::state_machine::FinalDecision;
 use std::path::{Path, PathBuf};
+use tracing_subscriber::EnvFilter;
 
 #[derive(Parser, Debug)]
 #[command(name = "accessibility-engine")]
@@ -42,6 +43,7 @@ async fn main() {
     if let Some(exit_code) = run_sandbox_runner() {
         std::process::exit(exit_code);
     }
+    setup_tracing();
 
     let args = Args::parse();
     let workspace_mode = match workspace_mode::WorkspaceMode::from_env() {
@@ -70,10 +72,7 @@ async fn main() {
         )
         .await
         {
-            eprintln!(
-                "PANIC: Network runtime engine bound crash: {}",
-                server_error
-            );
+            tracing::error!(error = %server_error, "network runtime engine crashed");
             std::process::exit(3);
         }
         return;
@@ -125,6 +124,16 @@ async fn main() {
             std::process::exit(3);
         }
     }
+}
+
+fn setup_tracing() {
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("core=info,tower_http=info"));
+    tracing_subscriber::fmt()
+        .with_env_filter(env_filter)
+        .with_target(false)
+        .compact()
+        .init();
 }
 
 fn run_sandbox_runner() -> Option<i32> {

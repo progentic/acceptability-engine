@@ -1,4 +1,5 @@
 use super::security::TrustControls;
+use super::telemetry::MetricsState;
 use super::worker::RunQueueSender;
 use crate::store::SharedConnection;
 use crate::workspace_mode::WorkspaceMode;
@@ -11,4 +12,5 @@ pub struct AppState {
     pub workspace_root: PathBuf,
     pub workspace_mode: WorkspaceMode,
     pub trust: TrustControls,
+    pub telemetry: MetricsState,
 }
