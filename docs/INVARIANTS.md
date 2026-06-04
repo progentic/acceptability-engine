@@ -108,7 +108,11 @@ Missing evidence, skipped gates, missing attempts, parse failures that affect co
 
 ## 9. Human review suspends final approval
 
-If a contract requires human review and all gates pass, the run status is `PENDING_HUMAN_REVIEW`.
+If a contract requires human review and all gates and admission policy pass, the run status is `PENDING_HUMAN_REVIEW`.
+
+Admission policy is evaluated before human-review suspension.
+
+A run may enter `PENDING_HUMAN_REVIEW` only after the required gates and admission policy pass.
 
 A pending human review run must not create an approved final decision.
 
@@ -165,6 +169,7 @@ Replay must be read-only. It may report persisted evidence and artifact presence
 For normal gate completion, the following writes must finalize together:
 
 - gate run records
+- policy evaluation trace
 - evidence bundle descriptors
 - attempt status
 - run status

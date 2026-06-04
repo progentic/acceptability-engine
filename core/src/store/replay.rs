@@ -11,6 +11,7 @@ pub struct ReplayReport {
     pub contract: ReplayContract,
     pub run: ReplayRun,
     pub attempts: Vec<ReplayAttempt>,
+    pub policy_evaluations: Vec<ReplayPolicyEvaluation>,
     pub review_decision: Option<ReplayReviewDecision>,
     pub final_decision: Option<ReplayFinalDecision>,
     pub evidence: Vec<ReplayEvidence>,
@@ -28,6 +29,7 @@ pub struct ReplayContract {
     pub repo_url: String,
     pub base_sha: String,
     pub requires_human_review: bool,
+    pub policy_json: String,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
@@ -72,6 +74,19 @@ pub struct ReplayReviewDecision {
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq, Eq)]
+pub struct ReplayPolicyEvaluation {
+    pub policy_evaluation_id: i64,
+    pub run_id: RunId,
+    pub attempt_id: AttemptId,
+    pub policy_id: String,
+    pub policy_version: u32,
+    pub passed: bool,
+    pub reason: String,
+    pub trace_json: String,
+    pub created_at: i64,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq, Eq)]
 pub struct ReplayFinalDecision {
     pub decision: String,
     pub reason: Option<String>,
@@ -110,6 +125,7 @@ pub fn replay_run(
         return Ok(None);
     };
     let attempts = replay_attempts(conn, run_id)?;
+    let policy_evaluations = replay_policy_evaluations(conn, run_id)?;
     let review_decision = replay_review_decision(conn, run_id)?;
     let final_decision = replay_final_decision(conn, run_id)?;
     let evidence = replay_evidence(conn, artifact_store, run_id)?;
@@ -118,6 +134,7 @@ pub fn replay_run(
         contract: header.contract,
         run: header.run,
         attempts,
+        policy_evaluations,
         review_decision,
         final_decision,
         evidence,
@@ -135,7 +152,8 @@ fn replay_header(conn: &Connection, run_id: RunId) -> Result<Option<ReplayHeader
     let mut stmt = conn
         .prepare(
             "SELECT contracts.id, contracts.repo_url, contracts.base_sha,
-                    contracts.requires_human_review, runs.id, runs.status, runs.created_at
+                    contracts.requires_human_review, contracts.policy_json,
+                    runs.id, runs.status, runs.created_at
              FROM runs
              JOIN contracts ON contracts.id = runs.contract_id
              WHERE runs.id = ?1",
@@ -192,6 +210,25 @@ fn replay_review_decision(
         return Ok(None);
     };
     Ok(Some(review_decision_from_row(row)?))
+}
+
+fn replay_policy_evaluations(
+    conn: &Connection,
+    run_id: RunId,
+) -> Result<Vec<ReplayPolicyEvaluation>, StoreError> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT id, run_id, attempt_id, policy_id, policy_version, passed,
+                    reason, trace_json, created_at
+             FROM policy_evaluations
+             WHERE run_id = ?1
+             ORDER BY created_at ASC, id ASC",
+        )
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    let rows = stmt
+        .query(rusqlite::params![run_id.get()])
+        .map_err(|source| StoreError::QueryFailed { source })?;
+    collect_policy_evaluations(rows)
 }
 
 fn replay_final_decision(
@@ -252,11 +289,12 @@ fn replay_header_from_row(row: &Row<'_>) -> Result<ReplayHeader, StoreError> {
             repo_url: read(row, 1)?,
             base_sha: read(row, 2)?,
             requires_human_review: read_bool(row, 3)?,
+            policy_json: read(row, 4)?,
         },
         run: ReplayRun {
-            run_id: RunId::new(read(row, 4)?),
-            status: read(row, 5)?,
-            created_at: read(row, 6)?,
+            run_id: RunId::new(read(row, 5)?),
+            status: read(row, 6)?,
+            created_at: read(row, 7)?,
         },
     })
 }
@@ -292,6 +330,16 @@ fn collect_gates(mut rows: Rows<'_>) -> Result<Vec<ReplayGate>, StoreError> {
         });
     }
     Ok(gates)
+}
+
+fn collect_policy_evaluations(
+    mut rows: Rows<'_>,
+) -> Result<Vec<ReplayPolicyEvaluation>, StoreError> {
+    let mut evaluations = Vec::new();
+    while let Some(row) = next_row(&mut rows)? {
+        evaluations.push(policy_evaluation_from_row(row)?);
+    }
+    Ok(evaluations)
 }
 
 fn collect_evidence(
@@ -335,6 +383,20 @@ fn review_decision_from_row(row: &Row<'_>) -> Result<ReplayReviewDecision, Store
         decision: read(row, 4)?,
         reason: read(row, 5)?,
         created_at: read(row, 6)?,
+    })
+}
+
+fn policy_evaluation_from_row(row: &Row<'_>) -> Result<ReplayPolicyEvaluation, StoreError> {
+    Ok(ReplayPolicyEvaluation {
+        policy_evaluation_id: read(row, 0)?,
+        run_id: RunId::new(read(row, 1)?),
+        attempt_id: AttemptId::new(read(row, 2)?),
+        policy_id: read(row, 3)?,
+        policy_version: read(row, 4)?,
+        passed: read_bool(row, 5)?,
+        reason: read(row, 6)?,
+        trace_json: read(row, 7)?,
+        created_at: read(row, 8)?,
     })
 }
 
@@ -397,9 +459,10 @@ mod tests {
     use super::*;
     use crate::contract::Contract;
     use crate::gates::result::{GateOutput, GateResult};
+    use crate::policy::PolicyEvaluation;
     use crate::store::{
         create_artifact_evidence_bundle, create_attempt, create_queued_run_for_tenant, open,
-        record_final_decision, record_gate_run, ArtifactInput,
+        record_final_decision, record_gate_run, record_policy_evaluation, ArtifactInput,
     };
     use std::path::PathBuf;
 
@@ -415,6 +478,8 @@ mod tests {
         assert_eq!(report.run.run_id, run_id);
         assert_eq!(report.attempts.len(), 1);
         assert_eq!(report.attempts[0].gates[0].gate_num, 1);
+        assert_eq!(report.policy_evaluations.len(), 1);
+        assert_eq!(report.policy_evaluations[0].policy_id, "strict-v1");
         assert_eq!(report.evidence.len(), 1);
         assert_eq!(report.evidence[0].artifact_present, Some(true));
         assert_eq!(
@@ -494,6 +559,7 @@ mod tests {
             &artifact,
         )
         .unwrap();
+        seed_policy_evaluation(conn, run_id, attempt_id);
         if delete_artifact {
             let _ = artifact_store
                 .delete_artifact(&artifact.storage_uri)
@@ -514,6 +580,22 @@ mod tests {
         record_final_decision(conn, run_id, "APPROVED", Some("approved")).unwrap();
     }
 
+    fn seed_policy_evaluation(conn: &Connection, run_id: RunId, attempt_id: AttemptId) {
+        record_policy_evaluation(
+            conn,
+            run_id,
+            attempt_id,
+            &PolicyEvaluation {
+                policy_id: "strict-v1".to_string(),
+                policy_version: 1,
+                passed: true,
+                reason: "admission policy passed".to_string(),
+                trace_json: "{}".to_string(),
+            },
+        )
+        .unwrap();
+    }
+
     fn test_contract() -> Contract {
         Contract {
             id: "replay-run".to_string(),
@@ -521,6 +603,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["core/src".to_string()],
             requires_human_review: true,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         }
     }
 

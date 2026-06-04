@@ -13,6 +13,7 @@ const REBUILD_EVIDENCE_BUNDLES_SQL: &str =
     include_str!("../../migrations/0007_rebuild_evidence_bundles.sql");
 const SECURITY_TRUST_SQL: &str = include_str!("../../migrations/0008_security_trust.sql");
 const REVIEW_DECISIONS_SQL: &str = include_str!("../../migrations/0009_review_decisions.sql");
+const ADMISSION_POLICY_SQL: &str = include_str!("../../migrations/0010_admission_policy.sql");
 
 pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     create_core_tables(conn)?;
@@ -21,6 +22,7 @@ pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     normalize_evidence_bundles_table(conn)?;
     normalize_security_trust_tables(conn)?;
     normalize_review_decision_tables(conn)?;
+    normalize_admission_policy_tables(conn)?;
     create_query_indexes(conn)?;
     Ok(())
 }
@@ -108,6 +110,16 @@ fn normalize_security_trust_tables(conn: &Connection) -> Result<(), StoreError> 
 fn normalize_review_decision_tables(conn: &Connection) -> Result<(), StoreError> {
     execute_migration(conn, REVIEW_DECISIONS_SQL)?;
     add_integer_column_if_missing(conn, "evidence_bundles", "review_decision_id")
+}
+
+fn normalize_admission_policy_tables(conn: &Connection) -> Result<(), StoreError> {
+    add_text_column_if_missing(
+        conn,
+        "contracts",
+        "policy_json",
+        "TEXT NOT NULL DEFAULT '{\"id\":\"strict-v1\",\"version\":1,\"rules\":{\"require_all_gates_pass\":true,\"required_gates\":[1,2,3,4,5,6,7,8],\"max_test_parse_errors\":0}}'",
+    )?;
+    execute_migration(conn, ADMISSION_POLICY_SQL)
 }
 
 fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {

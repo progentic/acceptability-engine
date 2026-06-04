@@ -21,6 +21,7 @@ Replay includes:
 - attempts
 - gate sequence
 - gate results
+- policy evaluations
 - review decision, if present
 - final decision, if present
 - evidence descriptors

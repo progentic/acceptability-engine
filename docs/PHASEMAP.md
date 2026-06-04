@@ -512,36 +512,45 @@ Non-Goals
 Steps
 
 1. Policy schema
-2. Evaluator
-3. Evidence linkage
-4. Validation
+2. Evaluation order
+3. Evaluator
+4. Evidence linkage
+5. Replay inclusion
+6. Validation
 
 Acceptance Evidence
 
-* policy fixtures
-* policy evaluation tests
-* policy trace evidence
-* policy inventory
+* Contract schema accepts optional `admission_policy` and defaults to `strict-v1`.
+* Policy evaluation order is documented as gate result, policy evaluation, human review requirement, final decision.
+* `policy_evaluations` table exists in migration `0010_admission_policy.sql`.
+* Policy evaluation tests cover required gates, failed gates, parse-error limits, unsupported policies, deterministic gate ordering, and attempts to weaken mandatory gates.
+* Orchestrator tests cover policy-driven approval, rejection, human-review suspension, policy trace persistence, and transaction rollback.
+* Replay output includes policy evaluations in deterministic order.
+* `docs/reviews/PHASE29_ADMISSION_POLICY_ENGINE.md` contains the policy scope, evaluation order, evidence model, validation evidence, and deviations.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents the policy decision boundary.
+* `INVARIANTS.md` documents the policy-before-review rule and transactional policy trace persistence.
+* `API.md` documents the optional `admission_policy` contract field.
+* `CHANGELOG.md` records version `0.0.30 - Admission Policy Engine`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Admission becomes policy driven.
+Admission is now policy driven through contract-scoped declarative policy evaluation.
 
 Notes / Deviations
+
+* `D29-001` is an accepted limitation: policy is contract-scoped and declarative, without server-global registry or dynamic scripting.
+* `D29-002` is an accepted limitation: policy trace evidence is stored in SQLite, not as filesystem artifacts.
 
 =====================================================================
 PHASE 30

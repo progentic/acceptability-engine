@@ -43,4 +43,9 @@ pub enum StoreError {
     },
     #[error("invalid artifact storage URI: {0}")]
     InvalidArtifactUri(String),
+    #[error("failed to serialize store payload: {source}")]
+    SerializationFailed {
+        #[source]
+        source: serde_json::Error,
+    },
 }

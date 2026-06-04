@@ -12,6 +12,19 @@ export interface ContractSubmission {
   base_sha: string;
   scopes: string[];
   requires_human_review: boolean;
+  admission_policy?: AdmissionPolicy;
+}
+
+export interface AdmissionPolicy {
+  id: string;
+  version: number;
+  rules: AdmissionPolicyRules;
+}
+
+export interface AdmissionPolicyRules {
+  require_all_gates_pass: boolean;
+  required_gates: number[];
+  max_test_parse_errors: number | null;
 }
 
 export interface SubmitResponse {

@@ -40,9 +40,21 @@ Request:
   "repo_url": "https://github.com/progentic/acceptability-engine.git",
   "base_sha": "a9993e364706816aba3e25717850c26c9cd0d89d",
   "scopes": ["core/src"],
-  "requires_human_review": true
+  "requires_human_review": true,
+  "admission_policy": {
+    "id": "strict-v1",
+    "version": 1,
+    "rules": {
+      "require_all_gates_pass": true,
+      "required_gates": [1, 2, 3, 4, 5, 6, 7, 8],
+      "max_test_parse_errors": 0
+    }
+  }
 }
 ```
+
+`admission_policy` is optional. When omitted, the server applies `strict-v1`.
+Unknown policy ids, unsupported policy versions, disabled mandatory gate checks, duplicate required gates, or reordered required gates are rejected during contract validation.
 
 Response:
 

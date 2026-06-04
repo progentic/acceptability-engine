@@ -623,6 +623,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["core/src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         }
     }
 

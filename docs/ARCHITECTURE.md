@@ -16,7 +16,7 @@ Rust owns contract validation, workspace selection, run state, gate execution, d
 
 TypeScript is an operator interface. It may display state and submit contracts through the HTTP API. It must not create authoritative decisions outside the Rust API.
 
-SQLite is the durable evidence store. It records contracts, runs, attempts, gate runs, final decisions, evidence bundle descriptors, and audit events.
+SQLite is the durable evidence store. It records contracts, runs, attempts, gate runs, policy evaluations, final decisions, evidence bundle descriptors, and audit events.
 
 The filesystem artifact store holds larger evidence payloads. SQLite stores descriptors for those artifacts, including storage URI, hash, byte length, content type, label, and summary.
 
@@ -140,6 +140,7 @@ The evidence model has these durable identities:
 - Run
 - Attempt
 - Gate run
+- Policy evaluation
 - Review decision
 - Evidence bundle
 - Final decision
@@ -149,7 +150,9 @@ A run may have multiple attempts. An attempt owns the gate run records for that 
 
 Human-review evidence links to the review decision that produced it.
 
-Gate telemetry artifacts are written to the artifact store before SQLite finalization. SQLite finalization then records gate rows, evidence descriptors, attempt status, run status, and final decision in one transaction.
+Admission policy evaluation runs after gate execution and before human-review suspension. The policy evaluates gate outputs against the contract policy, records a policy trace, and may reject a run before human review can be requested. Human review may suspend only a policy-passing run.
+
+Gate telemetry artifacts are written to the artifact store before SQLite finalization. SQLite finalization then records gate rows, policy trace, evidence descriptors, attempt status, run status, and final decision in one transaction.
 
 Artifact retention is an operator CLI workflow. It may remove filesystem artifact bytes after writing audit evidence, but it must not delete or mutate SQLite evidence descriptors.
 

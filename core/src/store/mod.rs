@@ -10,6 +10,7 @@ mod final_decisions;
 mod gate_records;
 mod health;
 mod mappers;
+mod policy_evaluations;
 mod queries;
 mod replay;
 mod review_decisions;
@@ -34,6 +35,7 @@ pub use evidence_reads::list_run_evidence_for_tenant;
 pub use final_decisions::record_final_decision;
 pub use gate_records::record_gate_run;
 pub use health::check_store_ready;
+pub use policy_evaluations::record_policy_evaluation;
 #[cfg(test)]
 pub use queries::{fetch_run_summary, list_runs};
 pub use queries::{fetch_run_summary_for_tenant, list_runs_for_tenant};
@@ -77,6 +79,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         };
         create_run(&conn, &contract).unwrap();
         create_run(&conn, &contract).unwrap();
@@ -100,6 +103,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         };
 
         let run_id = create_queued_run(&conn, &contract).unwrap();
@@ -128,6 +132,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         };
 
         let run_id = create_run(&conn, &contract).unwrap();
@@ -457,6 +462,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         };
         let run_id = create_run(&conn, &contract).unwrap();
 
@@ -538,6 +544,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
         }
     }
 

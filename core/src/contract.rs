@@ -1,4 +1,5 @@
 use crate::error::validation::ValidationError;
+use crate::policy::AdmissionPolicy;
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path};
 
@@ -14,6 +15,8 @@ pub struct Contract {
     pub base_sha: String,
     pub scopes: Vec<String>,
     pub requires_human_review: bool,
+    #[serde(default)]
+    pub admission_policy: AdmissionPolicy,
 }
 
 impl Contract {
@@ -22,6 +25,7 @@ impl Contract {
         validate_repo_url(&self.repo_url)?;
         validate_base_sha(&self.base_sha)?;
         validate_scopes(&self.scopes)?;
+        self.admission_policy.validate()?;
         Ok(())
     }
 }
@@ -163,6 +167,7 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["core/src".to_string()],
             requires_human_review: false,
+            admission_policy: AdmissionPolicy::default(),
         }
     }
 

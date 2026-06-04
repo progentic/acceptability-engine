@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.30] - 2026-06-04 - Admission Policy Engine
+
+### Added
+- **Contract Admission Policy** - Added optional `admission_policy` contract input with `strict-v1` defaults for declarative policy evaluation
+- **Policy Evaluation Store** - Added `policy_evaluations` persistence with run, attempt, policy id, policy version, outcome, reason, trace JSON, and timestamp
+- **Policy Evidence** - Added transactional policy trace persistence during normal run finalization
+- **Policy Replay Output** - Added policy evaluations to deterministic replay reports
+- **TypeScript Policy Type** - Added optional admission policy fields to the browser API contract model
+- **Phase 29 Policy Review** - Added `docs/reviews/PHASE29_ADMISSION_POLICY_ENGINE.md` with policy scope, evaluation order, evidence model, validation evidence, and deviations
+- **Policy Coverage** - Added tests for required gates, failed gates, test parse-error limits, unsupported policy rejection, deterministic gate ordering, mandatory-gate weakening rejection, policy trace persistence, and rollback
+
+### Changed
+- **Admission Ordering** - Finalization now evaluates gate results, then admission policy, then human review requirement before final decision
+- **Governance Documentation** - Updated architecture, invariants, API, and phase map records for the policy decision boundary
+
 ## [0.0.29] - 2026-06-04 - Replay Engine
 
 ### Added

@@ -22,6 +22,8 @@ pub enum ValidationError {
     EmptyScope { index: usize },
     #[error("scope at index {index} must be a normalized relative path: '{value}'")]
     InvalidScopePath { index: usize, value: String },
+    #[error("invalid admission policy: {0}")]
+    InvalidPolicy(String),
     #[error("workspace path escaped configured workspace root")]
     WorkspaceEscapesRoot,
     #[error("AH_WORKSPACE_MODE has unsupported value: '{0}'")]

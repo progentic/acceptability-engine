@@ -78,9 +78,19 @@ fn create_run_for_tenant_with_status(
 }
 
 fn insert_contract_if_missing(conn: &Connection, contract: &Contract) -> Result<(), StoreError> {
+    let policy_json = serde_json::to_string(&contract.admission_policy)
+        .map_err(|source| StoreError::SerializationFailed { source })?;
     conn.execute(
-        "INSERT OR IGNORE INTO contracts (id, repo_url, base_sha, requires_human_review) VALUES (?1, ?2, ?3, ?4)",
-        rusqlite::params![contract.id, contract.repo_url, contract.base_sha, contract.requires_human_review as i32],
+        "INSERT OR IGNORE INTO contracts (
+            id, repo_url, base_sha, requires_human_review, policy_json
+         ) VALUES (?1, ?2, ?3, ?4, ?5)",
+        rusqlite::params![
+            contract.id,
+            contract.repo_url,
+            contract.base_sha,
+            contract.requires_human_review as i32,
+            policy_json
+        ],
     )
     .map_err(|source| StoreError::InsertFailed { source })?;
     Ok(())

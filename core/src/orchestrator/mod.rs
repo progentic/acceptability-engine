@@ -5,11 +5,12 @@ use crate::contract::Contract;
 use crate::error::OrchestratorError;
 use crate::gates::result::GateOutput;
 use crate::gates::runner::run_gates_sequential_with_progress;
+use crate::policy::{evaluate_policy, PolicyEvaluation};
 use crate::progress::ProgressPublisher;
 use crate::store::{
     create_attempt, create_evidence_bundle, create_run, record_final_decision, record_gate_run,
-    update_attempt_status, update_run_status, with_connection, with_transaction, ArtifactStore,
-    AttemptId, RunId, SharedConnection,
+    record_policy_evaluation, update_attempt_status, update_run_status, with_connection,
+    with_transaction, ArtifactStore, AttemptId, RunId, SharedConnection,
 };
 use evidence_artifacts::{
     prepare_gate_artifact, record_gate_artifact_descriptor, PendingGateArtifact,
@@ -48,6 +49,7 @@ pub async fn execute_existing_run(
     let attempt_id = create_run_attempt(&db, run_id).await?;
     progress.attempt_started(attempt_id);
     let requires_human_review = contract.requires_human_review;
+    let admission_policy = contract.admission_policy.clone();
     let run_context = build_run_context(contract, workspace);
     let gate_outputs = match run_gates_sequential_with_progress(&run_context, &progress).await {
         Ok(outputs) => outputs,
@@ -56,7 +58,8 @@ pub async fn execute_existing_run(
             return Err(error.into());
         }
     };
-    let final_decision = decide_from_gate_outputs(&gate_outputs, requires_human_review);
+    let policy_evaluation = evaluate_policy(&gate_outputs, &admission_policy);
+    let final_decision = decide_from_policy(&policy_evaluation, requires_human_review);
 
     finalize_run_record(
         &db,
@@ -64,6 +67,7 @@ pub async fn execute_existing_run(
         run_id,
         attempt_id,
         &gate_outputs,
+        &policy_evaluation,
         &final_decision,
     )
     .await?;
@@ -123,19 +127,14 @@ fn build_run_context(contract: Contract, workspace: PathBuf) -> Run {
     }
 }
 
-fn decide_from_gate_outputs(
-    gate_outputs: &[GateOutput],
+fn decide_from_policy(
+    policy_evaluation: &PolicyEvaluation,
     requires_human_review: bool,
 ) -> FinalDecision {
-    for output in gate_outputs {
-        if !output.passed() {
-            return FinalDecision::Reject {
-                reason: format!(
-                    "Gate {} execution failed to clear verification checks.",
-                    output.gate_num()
-                ),
-            };
-        }
+    if !policy_evaluation.passed {
+        return FinalDecision::Reject {
+            reason: policy_evaluation.reason.clone(),
+        };
     }
     if requires_human_review {
         return FinalDecision::PendingHumanReview;
@@ -149,9 +148,11 @@ async fn finalize_run_record(
     run_id: RunId,
     attempt_id: AttemptId,
     gate_outputs: &[GateOutput],
+    policy_evaluation: &PolicyEvaluation,
     final_decision: &FinalDecision,
 ) -> Result<(), OrchestratorError> {
     let gate_outputs = gate_outputs.to_vec();
+    let policy_evaluation = policy_evaluation.clone();
     let gate_artifacts = prepare_gate_artifacts(artifact_store, run_id, attempt_id, &gate_outputs)?;
     let status = final_status(final_decision);
     let attempt_status = final_attempt_status(final_decision);
@@ -165,12 +166,24 @@ async fn finalize_run_record(
                 &gate_outputs,
                 &gate_artifacts,
             )?;
+            record_admission_policy(transaction, run_id, attempt_id, &policy_evaluation)?;
             update_attempt_status(transaction, attempt_id, attempt_status)?;
             update_run_status(transaction, run_id, status)?;
             record_persisted_final_decision(transaction, run_id, final_decision_record)
         })
     })
     .await?)
+}
+
+fn record_admission_policy(
+    conn: &crate::store::Connection,
+    run_id: RunId,
+    attempt_id: AttemptId,
+    evaluation: &PolicyEvaluation,
+) -> Result<(), crate::error::StoreError> {
+    record_policy_evaluation(conn, run_id, attempt_id, evaluation)?;
+    create_evidence_bundle(conn, run_id, Some(attempt_id), None, &evaluation.reason)?;
+    Ok(())
 }
 
 fn prepare_gate_artifacts(
@@ -258,42 +271,41 @@ mod tests {
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
             scopes: vec!["core/src".to_string()],
             requires_human_review: false,
+            admission_policy: crate::policy::AdmissionPolicy::default(),
+        }
+    }
+
+    fn policy_evaluation(passed: bool, reason: &str) -> PolicyEvaluation {
+        PolicyEvaluation {
+            policy_id: "strict-v1".to_string(),
+            policy_version: 1,
+            passed,
+            reason: reason.to_string(),
+            trace_json: "{}".to_string(),
         }
     }
 
     #[test]
-    fn approves_when_all_gate_outputs_pass() {
-        let gate_outputs = vec![
-            GateOutput::Simple(GateResult::pass(1, "contract ok")),
-            GateOutput::Simple(GateResult::pass(2, "workspace ok")),
-        ];
-
+    fn approves_when_policy_passes() {
         assert!(matches!(
-            decide_from_gate_outputs(&gate_outputs, false),
+            decide_from_policy(&policy_evaluation(true, "admission policy passed"), false),
             FinalDecision::Approve
         ));
     }
 
     #[test]
-    fn requests_human_review_when_all_gate_outputs_pass() {
-        let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
-
+    fn requests_human_review_when_policy_passes() {
         assert!(matches!(
-            decide_from_gate_outputs(&gate_outputs, true),
+            decide_from_policy(&policy_evaluation(true, "admission policy passed"), true),
             FinalDecision::PendingHumanReview
         ));
     }
 
     #[test]
-    fn rejects_when_any_gate_output_fails() {
-        let gate_outputs = vec![GateOutput::Simple(GateResult::fail(
-            3,
-            "boundary failed".to_string(),
-        ))];
-
+    fn rejects_when_policy_fails() {
         assert!(matches!(
-            decide_from_gate_outputs(&gate_outputs, true),
-            FinalDecision::Reject { reason } if reason.contains("Gate 3")
+            decide_from_policy(&policy_evaluation(false, "Admission policy rejected gate 3"), true),
+            FinalDecision::Reject { reason } if reason.contains("gate 3")
         ));
     }
 
@@ -316,7 +328,8 @@ mod tests {
             2,
             "workspace failed".to_string(),
         ))];
-        let final_decision = decide_from_gate_outputs(&gate_outputs, false);
+        let policy_evaluation = policy_evaluation(false, "Admission policy rejected gate 2");
+        let final_decision = decide_from_policy(&policy_evaluation, false);
 
         finalize_run_record(
             &db,
@@ -324,6 +337,7 @@ mod tests {
             run_id,
             attempt_id,
             &gate_outputs,
+            &policy_evaluation,
             &final_decision,
         )
         .await
@@ -336,7 +350,8 @@ mod tests {
         assert_eq!(summary.status, "REJECTED");
         assert_eq!(summary.gates.len(), 1);
         assert_eq!(final_decision_count(&db, run_id).await, 1);
-        assert_eq!(evidence_bundle_count(&db, attempt_id).await, 1);
+        assert_eq!(policy_evaluation_count(&db, attempt_id).await, 1);
+        assert_eq!(evidence_bundle_count(&db, attempt_id).await, 2);
         assert_eq!(gate_evidence_link_count(&db, attempt_id).await, 1);
         assert_eq!(
             gate_artifact_content_type(&db, run_id).await,
@@ -354,7 +369,8 @@ mod tests {
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
         let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
-        let final_decision = decide_from_gate_outputs(&gate_outputs, true);
+        let policy_evaluation = policy_evaluation(true, "admission policy passed");
+        let final_decision = decide_from_policy(&policy_evaluation, true);
 
         finalize_run_record(
             &db,
@@ -362,6 +378,7 @@ mod tests {
             run_id,
             attempt_id,
             &gate_outputs,
+            &policy_evaluation,
             &final_decision,
         )
         .await
@@ -374,7 +391,7 @@ mod tests {
         assert_eq!(summary.status, "PENDING_HUMAN_REVIEW");
         assert_eq!(summary.gates.len(), 1);
         assert_eq!(final_decision_count(&db, run_id).await, 0);
-        assert_eq!(evidence_bundle_count(&db, attempt_id).await, 1);
+        assert_eq!(evidence_bundle_count(&db, attempt_id).await, 2);
         assert_eq!(gate_evidence_link_count(&db, attempt_id).await, 1);
     }
 
@@ -386,7 +403,8 @@ mod tests {
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
         let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
-        let final_decision = decide_from_gate_outputs(&gate_outputs, false);
+        let policy_evaluation = policy_evaluation(true, "admission policy passed");
+        let final_decision = decide_from_policy(&policy_evaluation, false);
 
         finalize_run_record(
             &db,
@@ -394,6 +412,7 @@ mod tests {
             run_id,
             attempt_id,
             &gate_outputs,
+            &policy_evaluation,
             &final_decision,
         )
         .await
@@ -416,7 +435,8 @@ mod tests {
         let run_id = create_run_record(&db, &contract).await.unwrap();
         let attempt_id = create_run_attempt(&db, run_id).await.unwrap();
         let gate_outputs = vec![GateOutput::Simple(GateResult::pass(1, "contract ok"))];
-        let final_decision = decide_from_gate_outputs(&gate_outputs, false);
+        let policy_evaluation = policy_evaluation(true, "admission policy passed");
+        let final_decision = decide_from_policy(&policy_evaluation, false);
         insert_final_decision(&db, run_id).await;
 
         let result = finalize_run_record(
@@ -425,12 +445,14 @@ mod tests {
             run_id,
             attempt_id,
             &gate_outputs,
+            &policy_evaluation,
             &final_decision,
         )
         .await;
 
         assert!(result.is_err());
         assert_eq!(attempt_status(&db, attempt_id).await, "RUNNING");
+        assert_eq!(policy_evaluation_count(&db, attempt_id).await, 0);
         assert_eq!(evidence_bundle_count(&db, attempt_id).await, 0);
         assert_eq!(latest_summary_gate_count(&db, run_id).await, 0);
     }
@@ -495,6 +517,19 @@ mod tests {
             conn.query_row(
                 "SELECT COUNT(*) FROM final_decisions WHERE run_id = ?1",
                 rusqlite::params![run_id.get()],
+                |row| row.get(0),
+            )
+            .map_err(|source| crate::error::StoreError::QueryFailed { source })
+        })
+        .await
+        .unwrap()
+    }
+
+    async fn policy_evaluation_count(db: &SharedConnection, attempt_id: AttemptId) -> i64 {
+        with_connection(db.clone(), move |conn| {
+            conn.query_row(
+                "SELECT COUNT(*) FROM policy_evaluations WHERE attempt_id = ?1",
+                rusqlite::params![attempt_id.get()],
                 |row| row.get(0),
             )
             .map_err(|source| crate::error::StoreError::QueryFailed { source })
