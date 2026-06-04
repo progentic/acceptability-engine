@@ -461,30 +461,35 @@ Steps
 
 Acceptance Evidence
 
-* replay tests
-* determinism tests
-* replay demonstrations
-* replay evidence validation
+* Replay tests cover contract, run, attempt, gate, evidence, review decision, and final decision output.
+* Determinism tests compare repeated replay output after normalizing `generated_at`.
+* Replay demonstration covers the `--replay-run-id` CLI path.
+* Replay evidence validation covers missing artifact indicators without descriptor mutation.
+* `docs/reviews/PHASE28_REPLAY_ENGINE.md` contains the replay contract and validation evidence.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents replay as a read-only reconstruction workflow.
+* `INVARIANTS.md` requires replay to avoid execution and mutation.
+* `DEPLOYMENT.md` documents replay CLI usage.
+* `CHANGELOG.md` records version `0.0.29 - Replay Engine`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Historical execution becomes reproducible.
+Historical execution is reproducible through read-only JSON replay reports.
 
 Notes / Deviations
+
+* `D28-001` is an accepted limitation: replay is exposed through the CLI first, not HTTP or UI.
+* `D28-002` is an accepted limitation: replay reports artifact presence but does not read artifact bytes.
 
 =====================================================================
 PHASE 29

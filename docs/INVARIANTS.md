@@ -158,6 +158,8 @@ Evidence linked to a human review decision must identify the run and review deci
 
 Artifact retention may delete filesystem artifact bytes only through an explicit audited workflow. Retention must not delete or mutate SQLite evidence descriptors.
 
+Replay must be read-only. It may report persisted evidence and artifact presence, but it must not execute gates, mutate state, recreate artifact bytes, or change final decisions.
+
 ## 13. SQLite finalization must be transactional
 
 For normal gate completion, the following writes must finalize together:

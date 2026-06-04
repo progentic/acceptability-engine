@@ -153,6 +153,8 @@ Gate telemetry artifacts are written to the artifact store before SQLite finaliz
 
 Artifact retention is an operator CLI workflow. It may remove filesystem artifact bytes after writing audit evidence, but it must not delete or mutate SQLite evidence descriptors.
 
+Replay is a read-only reconstruction workflow. It accepts a run id and emits a deterministic JSON report from SQLite evidence descriptors and artifact presence checks. Replay must not execute gates, mutate run state, mutate evidence descriptors, recreate deleted artifacts, or change final decisions.
+
 ## Workspace model
 
 The supported workspace modes are local and Git.

@@ -57,6 +57,11 @@ impl ArtifactStore {
         self.checked_artifact_path(storage_uri).map(|_| ())
     }
 
+    pub fn artifact_exists(&self, storage_uri: &str) -> Result<bool, StoreError> {
+        let absolute_path = self.checked_artifact_path(storage_uri)?;
+        Ok(absolute_path.exists())
+    }
+
     #[cfg(test)]
     pub fn root_for_tests(&self) -> &Path {
         self.root.as_ref()

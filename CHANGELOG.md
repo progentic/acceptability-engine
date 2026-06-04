@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.29] - 2026-06-04 - Replay Engine
+
+### Added
+- **Replay Contract** - Added `docs/reviews/PHASE28_REPLAY_ENGINE.md` defining replay input, deterministic JSON output, read-only rules, validation evidence, and deviations
+- **Replay Report Model** - Added read-only replay reports with contract, run, attempts, gates, review decision, final decision, evidence descriptors, missing artifact indicators, generated timestamp, and source database identity
+- **Replay CLI** - Added `--replay-run-id` for emitting replay JSON from the existing database and artifact root
+- **Replay Coverage** - Added tests for complete replay reports, missing artifact indicators, deterministic replay content, and missing run behavior
+
+### Changed
+- **Replay Governance** - Updated architecture, invariants, deployment, and phase map records to document replay as read-only reconstruction
+
 ## [0.0.28] - 2026-06-04 - Artifact Retention
 
 ### Added

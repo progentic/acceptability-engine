@@ -31,6 +31,14 @@ accessibility-engine --workspace /workspaces --database /data/evidence.db --arti
 
 Retention deletes only filesystem artifact bytes. SQLite evidence descriptors remain durable, and every planned, deleted, dry-run, or missing artifact outcome is recorded in `audit_events`.
 
+Generate a replay report from the engine CLI against the same database and artifact root:
+
+```bash
+accessibility-engine --workspace /workspaces --database /data/evidence.db --artifact-root /artifacts --replay-run-id 123
+```
+
+Replay emits JSON to stdout. It is read-only and reports missing artifact bytes without recreating them.
+
 ## Kubernetes
 
 Apply the deployment manifest:

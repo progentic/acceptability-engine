@@ -11,6 +11,7 @@ mod gate_records;
 mod health;
 mod mappers;
 mod queries;
+mod replay;
 mod review_decisions;
 mod runs;
 mod schema;
@@ -36,6 +37,7 @@ pub use health::check_store_ready;
 #[cfg(test)]
 pub use queries::{fetch_run_summary, list_runs};
 pub use queries::{fetch_run_summary_for_tenant, list_runs_for_tenant};
+pub use replay::{replay_run, ReplayReport};
 pub use review_decisions::{
     finalize_human_review, RecordedReviewDecision, ReviewDecisionInput, ReviewDecisionKind,
 };

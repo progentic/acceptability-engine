@@ -43,6 +43,10 @@ struct Args {
     #[arg(long)]
     retention_dry_run: bool,
 
+    /// Emit a deterministic JSON replay report for an existing run id
+    #[arg(long)]
+    replay_run_id: Option<i64>,
+
     /// Bind and run as an HTTP web service on specified network port
     #[arg(short, long)]
     port: Option<u16>,
@@ -95,6 +99,24 @@ async fn main() {
             }
             Err(error) => {
                 eprintln!("PANIC: Artifact retention failed: {}", error);
+                std::process::exit(3);
+            }
+        }
+    }
+
+    if let Some(run_id) = args.replay_run_id {
+        let artifact_store = store::ArtifactStore::new(args.artifact_root);
+        match replay_run_report(shared_db, artifact_store, store::RunId::new(run_id)).await {
+            Ok(Some(report)) => {
+                println!("{}", serde_json::to_string_pretty(&report).unwrap());
+                std::process::exit(0);
+            }
+            Ok(None) => {
+                eprintln!("PANIC: Replay run record not found for ID '{}'", run_id);
+                std::process::exit(2);
+            }
+            Err(error) => {
+                eprintln!("PANIC: Replay failed: {}", error);
                 std::process::exit(3);
             }
         }
@@ -177,6 +199,17 @@ async fn main() {
             std::process::exit(3);
         }
     }
+}
+
+async fn replay_run_report(
+    db: store::SharedConnection,
+    artifact_store: store::ArtifactStore,
+    run_id: store::RunId,
+) -> Result<Option<store::ReplayReport>, error::StoreError> {
+    store::with_connection(db, move |conn| {
+        store::replay_run(conn, &artifact_store, run_id)
+    })
+    .await
 }
 
 async fn run_artifact_retention(
