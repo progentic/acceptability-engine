@@ -8,6 +8,7 @@ import { renderMetrics } from "./render/metrics";
 import { renderReviewQueue } from "./render/review";
 import { renderRunList } from "./render/runs";
 import { createState, selectedRunFromList, type AppState } from "./state";
+import { applySemanticTheme } from "./theme/semantic";
 import "./styles.css";
 
 const RUN_POLL_MS = 5000;
@@ -15,6 +16,7 @@ const DETAIL_POLL_MS = 2000;
 
 const state = createState("/api");
 
+applySemanticTheme(document.documentElement);
 renderLayout();
 bindEvents(state);
 void refreshRuns(state);

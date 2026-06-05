@@ -45,19 +45,6 @@ export function gateName(gateNumber: number): string {
   );
 }
 
-export function statusTone(status: RunStatus | string): string {
-  if (status === "APPROVED") {
-    return "positive";
-  }
-  if (status === "REJECTED" || status === "FAILED_INTERNAL") {
-    return "negative";
-  }
-  if (status === "PENDING_HUMAN_REVIEW") {
-    return "review";
-  }
-  return "active";
-}
-
 export function isLiveStatus(status: RunStatus): boolean {
   return status === "QUEUED" || status === "RUNNING";
 }

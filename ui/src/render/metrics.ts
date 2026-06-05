@@ -1,5 +1,6 @@
 import { escapeHtml, setHtml } from "../dom";
 import type { AppState } from "../state";
+import { statusClass } from "../theme/semantic";
 
 const STATUSES = [
   "QUEUED",
@@ -21,7 +22,7 @@ function countStatus(state: AppState, status: string): number {
 
 function metricCell(label: string, value: number): string {
   return `
-    <article class="metric">
+    <article class="metric ${statusClass(label)}">
       <span>${escapeHtml(label.replaceAll("_", " "))}</span>
       <strong>${value}</strong>
     </article>

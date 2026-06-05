@@ -1,5 +1,5 @@
 import { escapeHtml, setHtml } from "../dom";
-import { formatBytes, formatDate, formatDuration, gateName, statusTone } from "../format";
+import { formatBytes, formatDate, formatDuration, gateName } from "../format";
 import type {
   AttemptGateDetail,
   AttemptSummary,
@@ -7,6 +7,7 @@ import type {
   RunDetail,
 } from "../models";
 import type { AppState } from "../state";
+import { statusClass } from "../theme/semantic";
 
 export function renderRunDetail(state: AppState): void {
   if (!state.selectedRun) {
@@ -32,7 +33,7 @@ function detailMarkup(detail: RunDetail): string {
         <p class="eyebrow">Run #${detail.summary.run_id}</p>
         <h2>${escapeHtml(detail.summary.contract_id)}</h2>
       </div>
-      <span class="status-pill ${statusTone(detail.summary.status)}">
+      <span class="status-pill ${statusClass(detail.summary.status)}">
         ${escapeHtml(detail.summary.status.replaceAll("_", " "))}
       </span>
     </section>
@@ -83,7 +84,9 @@ function attemptItem(attempt: AttemptSummary): string {
   return `
     <article class="attempt-item">
       <strong>Attempt ${attempt.attempt_number}</strong>
-      <span>${escapeHtml(attempt.status)} · ${formatDate(attempt.created_at)}</span>
+      <span class="attempt-status ${statusClass(attempt.status)}">
+        ${escapeHtml(attempt.status)} · ${formatDate(attempt.created_at)}
+      </span>
     </article>
   `;
 }

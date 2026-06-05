@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.36] - 2026-06-05 - Browser UI Theme Refresh
+
+### Added
+- **Semantic UI Theme** - Added approved Acceptability Engine palette tokens and semantic color tokens for status, action, text, and surface usage
+
+### Changed
+- **Browser UI Styling** - Updated the browser dashboard, run list, run detail, review queue, gate timeline, evidence panels, and operations metrics to use semantic theme variables instead of raw component colors
+- **Status Visualization** - Mapped queued/running, pending human review, approved, rejected, and failed-internal states to consistent semantic status classes while preserving visible status labels
+
 ## [0.0.35] - 2026-06-05 - Disaster Recovery Validation
 
 ### Added

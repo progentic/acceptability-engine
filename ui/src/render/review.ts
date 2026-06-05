@@ -2,6 +2,7 @@ import { escapeHtml, setHtml } from "../dom";
 import { formatDate } from "../format";
 import type { AppState } from "../state";
 import { reviewRuns } from "../state";
+import { statusClass } from "../theme/semantic";
 
 export function renderReviewQueue(state: AppState): void {
   const runs = reviewRuns(state);
@@ -14,9 +15,9 @@ export function renderReviewQueue(state: AppState): void {
 
 function reviewItem(run: ReturnType<typeof reviewRuns>[number]): string {
   return `
-    <button class="review-item" data-run-id="${run.run_id}">
+    <button class="review-item ${statusClass(run.status)}" data-run-id="${run.run_id}">
       <strong>${escapeHtml(run.contract_id)}</strong>
-      <span>#${run.run_id} · ${formatDate(run.created_at)}</span>
+      <span>#${run.run_id} · ${formatDate(run.created_at)} · ${escapeHtml(run.status.replaceAll("_", " "))}</span>
     </button>
   `;
 }

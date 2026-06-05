@@ -1,7 +1,8 @@
 import { escapeHtml, setHtml } from "../dom";
-import { formatDate, statusTone } from "../format";
+import { formatDate } from "../format";
 import type { AppState } from "../state";
 import { visibleRuns } from "../state";
+import { statusClass } from "../theme/semantic";
 
 export function renderRunList(state: AppState): void {
   const runs = visibleRuns(state);
@@ -20,7 +21,7 @@ function runButton(state: AppState, run: ReturnType<typeof visibleRuns>[number])
   const selected = state.selectedRunId === run.run_id ? " selected" : "";
   return `
     <button class="run-item${selected}" data-run-id="${run.run_id}">
-      <span class="status-dot ${statusTone(run.status)}"></span>
+      <span class="status-dot ${statusClass(run.status)}"></span>
       <span>
         <strong>${escapeHtml(run.contract_id)}</strong>
         <small>#${run.run_id} · ${formatDate(run.created_at)}</small>
