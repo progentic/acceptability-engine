@@ -103,3 +103,37 @@ fn runner_timeout() -> Duration {
         .map(Duration::from_millis)
         .unwrap_or_else(|| Duration::from_secs(1))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gates::resource_limits::{
+        apply_resource_limits_calls, reset_apply_resource_limits_calls,
+    };
+
+    #[test]
+    fn sandbox_runner_invokes_resource_limit_configuration() {
+        reset_apply_resource_limits_calls();
+
+        let status = run_sandboxed_command(success_command_args()).unwrap();
+
+        assert!(status.success());
+        assert_eq!(apply_resource_limits_calls(), 1);
+    }
+
+    #[cfg(unix)]
+    fn success_command_args() -> Vec<OsString> {
+        vec!["--", "/bin/sh", "-c", "exit 0"]
+            .into_iter()
+            .map(OsString::from)
+            .collect()
+    }
+
+    #[cfg(windows)]
+    fn success_command_args() -> Vec<OsString> {
+        vec!["--", "cmd", "/C", "exit 0"]
+            .into_iter()
+            .map(OsString::from)
+            .collect()
+    }
+}

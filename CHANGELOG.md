@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.35] - 2026-06-05 - Disaster Recovery Validation
+
+### Added
+- **Disaster Recovery Runbook** - Added `docs/runbooks/disaster_recovery.md` with recovery checklist, verification commands, success criteria, postmortem inputs, and Phase 34 validation notes
+- **Phase 34 DR Report** - Added `docs/reviews/PHASE34_DISASTER_RECOVERY_VALIDATION.md` with exercise scope, recovery fixture, procedure, timing, postmortem review, validation evidence, and deviations
+- **DR Replay Validation** - Added a file-backed recovery test that consumes the Phase 33 backup fixture, deletes originals, restores from backup, and verifies normalized replay equality
+
+### Changed
+- **Operational Routing** - Updated operations, deployment, incident response, restore, and phase map documentation so disaster recovery procedures are discoverable from the operator path
+- **Recovery Scope** - Documented Phase 34 as local evidence-store recovery validation while leaving live Kubernetes rebuild validation separate
+
+## [0.0.34] - 2026-06-05 - Backup Restore Validation
+
+### Added
+- **Backup Runbook** - Added `docs/runbooks/backup.md` with backup procedure, artifact shape, inventory, integrity validation, and restore prerequisites
+- **Phase 33 Backup Report** - Added `docs/reviews/PHASE33_BACKUP_RESTORE_VALIDATION.md` with verification contract, recovery fixture, backup artifact shape, integrity validation, restore prerequisites, and validation evidence
+- **Backup Fixture Validation** - Added a file-backed backup validation test that creates fixture run history, writes replay evidence, backs up SQLite and artifacts, and validates inventory hashes for copied evidence
+
+### Changed
+- **Restore Documentation** - Updated restore, operations, deployment, and phase map documentation so backup artifact shape and restore prerequisites are visible before disaster recovery
+
 ## [0.0.33] - 2026-06-04 - Operational Readiness
 
 ### Added
@@ -28,7 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Restricted Kubernetes Profile** - Added non-root execution, no privilege escalation, dropped capabilities, RuntimeDefault seccomp, read-only root filesystem, explicit writable mounts, resource limits, and deny-all egress to the Kubernetes manifest
 - **Compose Local Hardening** - Added dropped capabilities, no-new-privileges, read-only root filesystem, and `/tmp` tmpfs for local Compose runs
 - **Phase 31 Sandbox Report** - Added `docs/reviews/PHASE31_SANDBOX_HARDENING.md` with namespace, filesystem, network, syscall, resource, containment, escape, deviation, and validation sections
-- **Sandbox Coverage** - Added tests for sandbox profile defaults, restricted profile validation, unknown profile rejection, and restricted kernel-control declarations
+- **Sandbox Coverage** - Added tests for sandbox profile defaults, restricted profile validation, unknown profile rejection, restricted kernel-control declarations, and sandbox runner to resource-limit wiring
 
 ### Changed
 - **Sandbox Architecture** - Documented `kubernetes-restricted` as the production containment baseline and `development` as non-production hardening, with full closure of D25-002 requiring runtime enforcement validation

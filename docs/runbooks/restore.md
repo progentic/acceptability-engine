@@ -4,8 +4,9 @@
 
 Restore SQLite evidence and artifact storage after data loss or corruption.
 
-Phase 32 defines the manual procedure. Phase 33 will validate backup and restore
-with an exercise report.
+Phase 32 defines the manual procedure. Phase 33 validates the backup artifact
+shape and restore prerequisites. Phase 34 validates destructive evidence-store
+restore through replay comparison.
 
 ## Restore Order
 
@@ -14,6 +15,20 @@ with an exercise report.
 3. Restore artifact bytes under `/artifacts`.
 4. Start the runtime with [Startup](startup.md).
 5. Run a replay check for a known historical run.
+
+Expected backup inputs are documented in [Backup](backup.md). The backup shape is:
+
+```text
+backup-root/
+  evidence.db
+  artifacts/
+  replay/
+    run-<id>-pre-backup.json
+  inventory.txt
+```
+
+Use [Disaster recovery](disaster_recovery.md) when restore is part of a
+destructive runtime rebuild.
 
 ## Validation
 

@@ -14,8 +14,10 @@ Durable state remains in SQLite and filesystem artifacts.
 - [Shutdown](runbooks/shutdown.md)
 - [Artifact retention](runbooks/retention.md)
 - [Replay](runbooks/replay.md)
+- [Backup](runbooks/backup.md)
 - [Incident response](runbooks/incident_response.md)
 - [Restore](runbooks/restore.md)
+- [Disaster recovery](runbooks/disaster_recovery.md)
 
 ## Monitoring Inventory
 
@@ -49,7 +51,9 @@ Durable state remains in SQLite and filesystem artifacts.
 | Security denial spike | `acceptability_security_denials_total` rises faster than the normal tenant baseline. | [Incident response](runbooks/incident_response.md) |
 | Artifact storage pressure | Artifact volume exceeds the local retention threshold. | [Artifact retention](runbooks/retention.md) |
 | Replay required | Operator must reconstruct a historical decision. | [Replay](runbooks/replay.md) |
+| Backup required | Operator must preserve SQLite, artifacts, replay baseline, and inventory. | [Backup](runbooks/backup.md) |
 | Restore required | SQLite or artifact storage is unavailable or corrupted. | [Restore](runbooks/restore.md) |
+| Disaster recovery required | Runtime and evidence stores must be rebuilt after destructive failure. | [Disaster recovery](runbooks/disaster_recovery.md) |
 
 ## Operator Invariants
 
@@ -70,3 +74,9 @@ Phase 32 operational readiness is complete when these artifacts exist:
 - Phase 32 operational readiness report.
 - Deployment documentation linking operators to this index.
 - Phase map and changelog entries recording the operational evidence.
+
+Phase 33 backup validation is recorded in
+`docs/reviews/PHASE33_BACKUP_RESTORE_VALIDATION.md`.
+
+Phase 34 disaster recovery validation is recorded in
+`docs/reviews/PHASE34_DISASTER_RECOVERY_VALIDATION.md`.

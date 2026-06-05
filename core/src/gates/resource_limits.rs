@@ -5,6 +5,10 @@ use std::time::Duration;
 const ADDRESS_SPACE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const PROCESS_COUNT: u64 = 256;
 
+#[cfg(test)]
+static APPLY_RESOURCE_LIMITS_CALLS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
 #[cfg(all(unix, target_os = "linux"))]
 type RlimitResource = libc::__rlimit_resource_t;
 
@@ -15,7 +19,24 @@ pub fn apply_resource_limits(
     command: &mut Command,
     timeout_duration: Duration,
 ) -> Result<(), ProcessError> {
+    #[cfg(test)]
+    record_apply_resource_limits_call();
     apply_platform_resource_limits(command, timeout_duration)
+}
+
+#[cfg(test)]
+fn record_apply_resource_limits_call() {
+    APPLY_RESOURCE_LIMITS_CALLS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub(crate) fn reset_apply_resource_limits_calls() {
+    APPLY_RESOURCE_LIMITS_CALLS.store(0, std::sync::atomic::Ordering::SeqCst);
+}
+
+#[cfg(test)]
+pub(crate) fn apply_resource_limits_calls() -> usize {
+    APPLY_RESOURCE_LIMITS_CALLS.load(std::sync::atomic::Ordering::SeqCst)
 }
 
 #[cfg(unix)]

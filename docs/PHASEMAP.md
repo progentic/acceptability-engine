@@ -641,7 +641,7 @@ Acceptance Evidence
 * Sandbox profile validation tests cover default, restricted, and unknown profiles.
 * Containment tests cover restricted profile kernel-control declarations.
 * Escape tests cover minimal command environment, proxy stripping, timeout cleanup, output caps, and deployment privilege restrictions.
-* Resource limit tests cover process timeout, output limits, process-group cleanup, and rlimit configuration through the runner.
+* Resource limit tests cover process timeout, output limits, process-group cleanup, and `sandbox_runner` to `resource_limits` wiring.
 * `docs/reviews/PHASE31_SANDBOX_HARDENING.md` contains the namespace, filesystem, network, syscall, and resource model.
 * `docs/reviews/PHASE31_SANDBOX_HARDENING.md` contains the sandbox validation report.
 * Kubernetes deployment uses non-root execution, no privilege escalation, dropped capabilities, RuntimeDefault seccomp, read-only root filesystem, explicit writable mounts, resource limits, and deny-all egress.
@@ -738,34 +738,99 @@ PHASE 33
 BACKUP / RESTORE VALIDATION
 ===========================
 
+Task
+
+Validate backup evidence.
+
+Goal
+
+Produce a reusable recovery fixture and backup evidence for Phase 34.
+
+Non-Goals
+
+* Destructive restore exercise
+* Deployment rebuild
+* External backup tooling
+
 Acceptance Evidence
 
-* backup procedure
-* restore procedure
-* restore validation report
-* integrity validation
+* `docs/runbooks/backup.md` documents backup procedure, artifact shape, inventory, integrity validation, and restore prerequisites.
+* `docs/runbooks/restore.md` references the backup artifact shape.
+* `docs/reviews/PHASE33_BACKUP_RESTORE_VALIDATION.md` records the backup validation report.
+* `backup_validation_creates_reusable_recovery_fixture` creates fixture run history, writes a pre-backup replay baseline, backs up SQLite and artifacts, and validates backup inventory hashes.
 
 Documentation Updates
 
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `DEPLOYMENT.md` links to the backup runbook.
+* `OPERATIONS.md` links the backup runbook and alert route.
+* `PHASEMAP.md` records Phase 33 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.34 - Backup Restore Validation`.
+
+Commands Ran
+
+* `cargo test backup_validation_creates_reusable_recovery_fixture`
+* `cargo test sandbox_runner_invokes_resource_limit_configuration`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+
+Summary
+
+Backup validation now has a runbook, restore prerequisites, backup inventory expectations, and a reusable recovery fixture for Phase 34.
+
+Notes / Deviations
+
+* The backup fixture is test-scoped and does not add production backup tooling.
+* External backup tooling remains deployment-specific.
 
 =====================================================================
 PHASE 34
 DISASTER RECOVERY VALIDATION
 ============================
 
+Task
+
+Validate evidence-store disaster recovery.
+
+Goal
+
+Prove restored SQLite and artifact evidence can reproduce historical replay output after destructive loss of the original store.
+
+Non-Goals
+
+* Live Kubernetes destruction
+* Cloud snapshot orchestration
+* External backup tooling
+
 Acceptance Evidence
 
-* DR exercise report
-* recovery timing report
-* recovery checklist
-* postmortem review
+* `docs/runbooks/disaster_recovery.md` documents the recovery checklist, verification commands, success criteria, and postmortem inputs.
+* `docs/reviews/PHASE34_DISASTER_RECOVERY_VALIDATION.md` records the DR exercise report.
+* `docs/reviews/PHASE34_DISASTER_RECOVERY_VALIDATION.md` records the recovery timing report.
+* `docs/reviews/PHASE34_DISASTER_RECOVERY_VALIDATION.md` records the postmortem review.
+* `disaster_recovery_restore_consumes_recovery_fixture` consumes the Phase 33 recovery fixture, deletes the live SQLite and artifact stores, restores from backup, and verifies normalized replay equality.
 
 Documentation Updates
 
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `DEPLOYMENT.md` links to the disaster recovery runbook.
+* `OPERATIONS.md` links the disaster recovery runbook and alert route.
+* `PHASEMAP.md` records Phase 34 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.35 - Disaster Recovery Validation`.
+
+Commands Ran
+
+* `cargo test disaster_recovery_restore_consumes_recovery_fixture`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+
+Summary
+
+Disaster recovery now has a runbook and deterministic validation that restored evidence stores reproduce historical replay output from the Phase 33 fixture.
+
+Notes / Deviations
+
+* The automated exercise validates local evidence-store recovery, not live Kubernetes rebuild.
 
 =====================================================================
 PHASE 35

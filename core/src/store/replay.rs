@@ -464,7 +464,9 @@ mod tests {
         create_artifact_evidence_bundle, create_attempt, create_queued_run_for_tenant, open,
         record_final_decision, record_gate_run, record_policy_evaluation, ArtifactInput,
     };
-    use std::path::PathBuf;
+    use sha2::{Digest, Sha256};
+    use std::fs;
+    use std::path::{Path, PathBuf};
 
     #[test]
     fn replay_report_includes_run_history() {
@@ -525,6 +527,32 @@ mod tests {
         assert!(report.is_none());
     }
 
+    #[test]
+    fn backup_validation_creates_reusable_recovery_fixture() {
+        let fixture = recovery_fixture();
+        let backup = create_recovery_backup(&fixture);
+
+        assert!(fixture.backup_database.exists());
+        assert!(fixture.backup_artifacts.exists());
+        assert!(backup_replay_path(&fixture, backup.run_id).exists());
+        assert!(fixture.backup_inventory.exists());
+        assert!(artifact_file_count(&fixture.backup_artifacts) > 0);
+        validate_backup_inventory(&fixture);
+        assert_eq!(backup.before.contract.id, "replay-run");
+    }
+
+    #[test]
+    fn disaster_recovery_restore_consumes_recovery_fixture() {
+        let fixture = recovery_fixture();
+        let backup = create_recovery_backup(&fixture);
+        destroy_live_evidence_store(&fixture);
+        restore_live_evidence_store(&fixture);
+        let restored_artifact_store = ArtifactStore::new(fixture.artifacts);
+        let after = normalized_replay(&fixture.database, &restored_artifact_store, backup.run_id);
+
+        assert_eq!(backup.before, after);
+    }
+
     fn seed_replay_run(
         conn: &Connection,
         artifact_store: &ArtifactStore,
@@ -567,6 +595,25 @@ mod tests {
         }
         seed_review_and_final_decision(conn, run_id);
         run_id
+    }
+
+    fn seed_file_backed_replay_run(database: &Path, artifact_store: &ArtifactStore) -> RunId {
+        create_parent_directory(database);
+        let database_url = database.to_string_lossy();
+        let conn = open(database_url.as_ref()).unwrap();
+        seed_replay_run(&conn, artifact_store, false)
+    }
+
+    fn normalized_replay(
+        database: &Path,
+        artifact_store: &ArtifactStore,
+        run_id: RunId,
+    ) -> ReplayReport {
+        let database_url = database.to_string_lossy();
+        let conn = open(database_url.as_ref()).unwrap();
+        let mut report = replay_run(&conn, artifact_store, run_id).unwrap().unwrap();
+        report.replay.generated_at = 0;
+        report
     }
 
     fn seed_review_and_final_decision(conn: &Connection, run_id: RunId) {
@@ -612,6 +659,276 @@ mod tests {
             .join("acceptability-engine-replay-tests")
             .join(name)
             .join(unique_suffix())
+    }
+
+    fn recovery_fixture() -> RecoveryFixture {
+        let root = test_root("disaster-recovery");
+        create_directory(&root);
+        RecoveryFixture {
+            database: root.join("live").join("evidence.db"),
+            artifacts: root.join("live").join("artifacts"),
+            backup_database: root.join("backup").join("evidence.db"),
+            backup_artifacts: root.join("backup").join("artifacts"),
+            backup_inventory: root.join("backup").join("inventory.txt"),
+        }
+    }
+
+    struct RecoveryFixture {
+        database: PathBuf,
+        artifacts: PathBuf,
+        backup_database: PathBuf,
+        backup_artifacts: PathBuf,
+        backup_inventory: PathBuf,
+    }
+
+    struct RecoveryBackup {
+        run_id: RunId,
+        before: ReplayReport,
+    }
+
+    fn create_recovery_backup(fixture: &RecoveryFixture) -> RecoveryBackup {
+        let artifact_store = ArtifactStore::new(fixture.artifacts.clone());
+        let run_id = seed_file_backed_replay_run(&fixture.database, &artifact_store);
+        let before = normalized_replay(&fixture.database, &artifact_store, run_id);
+        write_replay_baseline(fixture, run_id, &before);
+        copy_file(&fixture.database, &fixture.backup_database);
+        copy_directory(&fixture.artifacts, &fixture.backup_artifacts);
+        write_backup_inventory(fixture, run_id);
+        RecoveryBackup { run_id, before }
+    }
+
+    fn write_replay_baseline(fixture: &RecoveryFixture, run_id: RunId, report: &ReplayReport) {
+        let replay = serde_json::to_string_pretty(report).unwrap();
+        write_file(&backup_replay_path(fixture, run_id), &replay);
+    }
+
+    fn backup_replay_path(fixture: &RecoveryFixture, run_id: RunId) -> PathBuf {
+        fixture
+            .backup_database
+            .parent()
+            .unwrap()
+            .join("replay")
+            .join(format!("run-{}-pre-backup.json", run_id.get()))
+    }
+
+    fn write_backup_inventory(fixture: &RecoveryFixture, run_id: RunId) {
+        let entries = backup_artifact_entries(fixture);
+        let mut lines = backup_inventory_header(fixture, run_id, entries.len());
+        lines.extend(backup_inventory_artifact_lines(&entries));
+        write_file(&fixture.backup_inventory, &lines.join("\n"));
+    }
+
+    fn backup_inventory_header(
+        fixture: &RecoveryFixture,
+        run_id: RunId,
+        artifact_count: usize,
+    ) -> Vec<String> {
+        let replay_path = backup_replay_path(fixture, run_id);
+        vec![
+            format!("created_at={}", current_unix_seconds().unwrap()),
+            format!("source_database={}", fixture.database.display()),
+            format!("source_artifact_root={}", fixture.artifacts.display()),
+            "database_file_name=evidence.db".to_string(),
+            format!("database_sha256={}", sha256_file(&fixture.backup_database)),
+            format!(
+                "replay_file_name={}",
+                relative_backup_path(fixture, &replay_path)
+            ),
+            format!("replay_sha256={}", sha256_file(&replay_path)),
+            format!("artifact_count={artifact_count}"),
+        ]
+    }
+
+    fn backup_inventory_artifact_lines(entries: &[(String, String)]) -> Vec<String> {
+        entries
+            .iter()
+            .enumerate()
+            .flat_map(|(index, (path, sha256))| {
+                [
+                    format!("artifact.{index}.path={path}"),
+                    format!("artifact.{index}.sha256={sha256}"),
+                ]
+            })
+            .collect()
+    }
+
+    fn backup_artifact_entries(fixture: &RecoveryFixture) -> Vec<(String, String)> {
+        let mut paths = relative_artifact_paths(&fixture.backup_artifacts);
+        paths.sort();
+        paths
+            .into_iter()
+            .map(|path| {
+                let sha256 = sha256_file(&fixture.backup_artifacts.join(&path));
+                (path, sha256)
+            })
+            .collect()
+    }
+
+    fn relative_artifact_paths(root: &Path) -> Vec<String> {
+        artifact_paths(root)
+            .into_iter()
+            .map(|path| relative_path(root, &path))
+            .collect()
+    }
+
+    fn artifact_paths(root: &Path) -> Vec<PathBuf> {
+        fs::read_dir(root)
+            .unwrap()
+            .flat_map(|entry| artifact_entry_paths(entry.unwrap().path()))
+            .collect()
+    }
+
+    fn artifact_entry_paths(path: PathBuf) -> Vec<PathBuf> {
+        if path.is_dir() {
+            artifact_paths(&path)
+        } else {
+            vec![path]
+        }
+    }
+
+    fn relative_path(root: &Path, path: &Path) -> String {
+        path.strip_prefix(root)
+            .unwrap()
+            .to_string_lossy()
+            .replace('\\', "/")
+    }
+
+    fn relative_backup_path(fixture: &RecoveryFixture, path: &Path) -> String {
+        let root = fixture.backup_database.parent().unwrap();
+        relative_path(root, path)
+    }
+
+    fn validate_backup_inventory(fixture: &RecoveryFixture) {
+        let inventory = read_file(&fixture.backup_inventory);
+        assert_eq!(
+            inventory_value(&inventory, "database_file_name"),
+            "evidence.db"
+        );
+        assert_eq!(
+            inventory_value(&inventory, "database_sha256"),
+            sha256_file(&fixture.backup_database)
+        );
+        validate_inventory_replay(fixture, &inventory);
+        validate_inventory_artifacts(fixture, &inventory);
+    }
+
+    fn validate_inventory_replay(fixture: &RecoveryFixture, inventory: &str) {
+        let replay_file_name = inventory_value(inventory, "replay_file_name");
+        let replay_path = fixture
+            .backup_database
+            .parent()
+            .unwrap()
+            .join(replay_file_name);
+        assert_eq!(
+            inventory_value(inventory, "replay_sha256"),
+            sha256_file(&replay_path)
+        );
+    }
+
+    fn validate_inventory_artifacts(fixture: &RecoveryFixture, inventory: &str) {
+        let entries = backup_artifact_entries(fixture);
+        assert_eq!(
+            inventory_value(inventory, "artifact_count"),
+            entries.len().to_string()
+        );
+        for (index, (path, sha256)) in entries.iter().enumerate() {
+            assert_eq!(
+                inventory_value(inventory, &format!("artifact.{index}.path")),
+                *path
+            );
+            assert_eq!(
+                inventory_value(inventory, &format!("artifact.{index}.sha256")),
+                *sha256
+            );
+        }
+    }
+
+    fn inventory_value(inventory: &str, key: &str) -> String {
+        let prefix = format!("{key}=");
+        inventory
+            .lines()
+            .find_map(|line| line.strip_prefix(&prefix))
+            .unwrap()
+            .to_string()
+    }
+
+    fn destroy_live_evidence_store(fixture: &RecoveryFixture) {
+        remove_file(&fixture.database);
+        remove_directory(&fixture.artifacts);
+    }
+
+    fn restore_live_evidence_store(fixture: &RecoveryFixture) {
+        copy_file(&fixture.backup_database, &fixture.database);
+        copy_directory(&fixture.backup_artifacts, &fixture.artifacts);
+    }
+
+    fn copy_directory(source: &Path, destination: &Path) {
+        create_directory(destination);
+        for entry in fs::read_dir(source).unwrap() {
+            let entry = entry.unwrap();
+            let source_path = entry.path();
+            let destination_path = destination.join(entry.file_name());
+            if source_path.is_dir() {
+                copy_directory(&source_path, &destination_path);
+            } else {
+                copy_file(&source_path, &destination_path);
+            }
+        }
+    }
+
+    fn artifact_file_count(path: &Path) -> usize {
+        fs::read_dir(path)
+            .unwrap()
+            .map(|entry| entry.unwrap().path())
+            .map(|path| {
+                if path.is_dir() {
+                    artifact_file_count(&path)
+                } else {
+                    1
+                }
+            })
+            .sum()
+    }
+
+    fn copy_file(source: &Path, destination: &Path) {
+        create_parent_directory(destination);
+        fs::copy(source, destination).unwrap();
+    }
+
+    fn write_file(path: &Path, contents: &str) {
+        create_parent_directory(path);
+        fs::write(path, contents).unwrap();
+    }
+
+    fn read_file(path: &Path) -> String {
+        fs::read_to_string(path).unwrap()
+    }
+
+    fn sha256_file(path: &Path) -> String {
+        hex_digest(fs::read(path).unwrap())
+    }
+
+    fn hex_digest(bytes: Vec<u8>) -> String {
+        Sha256::digest(bytes)
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect()
+    }
+
+    fn create_directory(path: &Path) {
+        fs::create_dir_all(path).unwrap();
+    }
+
+    fn create_parent_directory(path: &Path) {
+        create_directory(path.parent().unwrap());
+    }
+
+    fn remove_directory(path: &Path) {
+        fs::remove_dir_all(path).unwrap();
+    }
+
+    fn remove_file(path: &Path) {
+        fs::remove_file(path).unwrap();
     }
 
     fn unique_suffix() -> String {

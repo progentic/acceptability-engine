@@ -52,3 +52,6 @@ Attach these artifacts to the incident record:
 Use [Startup](startup.md) after restarting the service.
 
 Use [Restore](restore.md) if SQLite or artifact storage must be recovered.
+
+Use [Disaster recovery](disaster_recovery.md) when runtime and evidence stores
+must be rebuilt after destructive failure.

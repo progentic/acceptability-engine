@@ -9,6 +9,11 @@
 Operational runbooks, alert definitions, and monitoring inventories are indexed
 in `docs/OPERATIONS.md`.
 
+Disaster recovery procedures are documented in
+`docs/runbooks/disaster_recovery.md`.
+
+Backup procedures are documented in `docs/runbooks/backup.md`.
+
 ## Container
 
 Build the runtime image:

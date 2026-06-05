@@ -82,6 +82,7 @@ limit as unsupported. Other rlimit failures remain process errors.
 | Output cap | `gates::process::tests::rejects_output_above_limit` |
 | Timeout cleanup | `gates::process::tests::timeout_kills_descendant_processes` |
 | Process timeout | `gates::process::tests::test_process_timeout` |
+| Runner rlimit wiring | `gates::sandbox_runner::tests::sandbox_runner_invokes_resource_limit_configuration` |
 | Kubernetes restricted controls | `deploy/kubernetes.yaml` |
 | Compose local hardening | `compose.yaml` |
 
