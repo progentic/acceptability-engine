@@ -28,4 +28,6 @@ pub enum ValidationError {
     WorkspaceEscapesRoot,
     #[error("AH_WORKSPACE_MODE has unsupported value: '{0}'")]
     InvalidWorkspaceMode(String),
+    #[error("AH_SANDBOX_PROFILE has unsupported value: '{0}'")]
+    InvalidSandboxProfile(String),
 }

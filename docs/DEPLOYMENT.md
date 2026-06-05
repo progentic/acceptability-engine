@@ -22,6 +22,11 @@ docker compose up --build
 
 The container stores SQLite data in `/data`, evidence artifacts in `/artifacts`, and materialized workspaces in `/workspaces`.
 
+Compose runs with the `development` sandbox profile. It drops Linux
+capabilities, sets `no-new-privileges`, uses a read-only root filesystem, and
+mounts `/tmp`, `/data`, `/artifacts`, and `/workspaces` as writable paths. This
+is local hardening, not production containment.
+
 Run artifact retention from the engine CLI against the same database and artifact root:
 
 ```bash
@@ -61,6 +66,7 @@ Supported roles are `viewer`, `submitter`, `reviewer`, and `admin`.
 
 - `AH_WORKSPACE_MODE=local` or `AH_WORKSPACE_MODE=git`
 - `AH_SECURITY_MODE=api-key`
+- `AH_SANDBOX_PROFILE=kubernetes-restricted`
 - `AH_API_KEYS=token|role|tenant|repo_prefixes`
 - `RUST_LOG=core=info`
 
@@ -70,6 +76,28 @@ Optional limits:
 
 - `AH_RATE_LIMIT_PER_MINUTE`
 - `AH_RUN_QUOTA_PER_HOUR`
+
+## Sandbox Profiles
+
+`AH_SANDBOX_PROFILE=development` is the default for local development.
+
+`AH_SANDBOX_PROFILE=kubernetes-restricted` is the documented production
+containment baseline and requires a Linux container runtime. The Kubernetes
+manifest enforces:
+
+- non-root container execution
+- no privilege escalation
+- dropped Linux capabilities
+- RuntimeDefault seccomp
+- read-only root filesystem
+- explicit writable mounts for `/data`, `/artifacts`, `/workspaces`, and `/tmp`
+- CPU and memory requests and limits
+- deny-all pod egress by default
+
+The restricted Kubernetes profile is compatible with local workspace mode.
+Git materialization that requires outbound clone access needs a deliberate
+future egress policy and is still constrained by the release-critical
+candidate-change acquisition gap.
 
 ## Metrics
 

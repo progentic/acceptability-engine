@@ -638,30 +638,44 @@ Non-Goals
 
 Acceptance Evidence
 
-* containment tests
-* escape tests
-* resource limit tests
-* sandbox validation report
+* Sandbox profile validation tests cover default, restricted, and unknown profiles.
+* Containment tests cover restricted profile kernel-control declarations.
+* Escape tests cover minimal command environment, proxy stripping, timeout cleanup, output caps, and deployment privilege restrictions.
+* Resource limit tests cover process timeout, output limits, process-group cleanup, and rlimit configuration through the runner.
+* `docs/reviews/PHASE31_SANDBOX_HARDENING.md` contains the namespace, filesystem, network, syscall, and resource model.
+* `docs/reviews/PHASE31_SANDBOX_HARDENING.md` contains the sandbox validation report.
+* Kubernetes deployment uses non-root execution, no privilege escalation, dropped capabilities, RuntimeDefault seccomp, read-only root filesystem, explicit writable mounts, resource limits, and deny-all egress.
+* Compose deployment uses local hardening with dropped capabilities, no-new-privileges, read-only root filesystem, and explicit writable mounts.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` documents the sandbox profiles and containment boundary.
+* `INVARIANTS.md` documents sandbox profile fail-closed behavior.
+* `DEPLOYMENT.md` documents `AH_SANDBOX_PROFILE` and the Kubernetes restricted profile.
+* `PHASEMAP.md` records Phase 31 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.32 - Sandbox Hardening`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
+* Compose YAML shape validation through Ruby YAML
+* Kubernetes manifest shape validation through Ruby YAML
 
 Summary
 
-Sandbox approaches production readiness.
+Sandboxing has a documented production profile backed by deployment controls and Rust runner hardening.
 
 Notes / Deviations
+
+* `D25-002` is narrowed for the documented `kubernetes-restricted` profile; full closure requires runtime enforcement validation on Kubernetes.
+* `D31-001` is an accepted limitation: `development` is not production containment.
+* `D31-002` is an accepted limitation: non-Kubernetes production deployments must provide equivalent controls.
+* `D31-003` is an accepted limitation: Git materialization with denied egress needs a future controlled egress design and remains constrained by D25-001.
+* `docker compose config` could not be run because Docker is unavailable in the local environment. Compose YAML was shape-validated by Ruby. Full Compose validation remains required where Docker is installed.
 
 =====================================================================
 PHASE 32

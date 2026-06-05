@@ -184,9 +184,13 @@ The command environment is cleared. The engine sets a minimal environment:
 - `CARGO_TERM_COLOR=never`
 - `GIT_TERMINAL_PROMPT=0`
 
-Process execution has timeouts. On Unix, gate commands run in a process group so timeout cleanup can kill descendants. Output capture is bounded.
+Process execution has timeouts. On Unix, gate commands run in a process group so timeout cleanup can kill descendants. Output capture is bounded. The sandbox runner applies CPU, address-space, and process-count rlimits where the platform supports them.
 
-This is not a full adversarial sandbox by itself. Production isolation must still define the container, namespace, filesystem, network, and syscall policy around the process boundary.
+Sandbox profile `development` is for local development and does not claim production containment.
+
+Sandbox profile `kubernetes-restricted` is the production containment baseline. It combines Rust runner hardening with Kubernetes/container runtime controls: pod namespaces, non-root execution, no privilege escalation, dropped Linux capabilities, RuntimeDefault seccomp, read-only root filesystem, explicit writable mounts, CPU and memory limits, and deny-all pod egress by default.
+
+The engine validates `AH_SANDBOX_PROFILE` at startup. Unknown profiles fail closed.
 
 ## API and UI relationship
 
@@ -232,6 +236,7 @@ Run progress is published as ordered WebSocket events. The progress stream is ob
 
 Phase 25 review evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
 Phase 30 review evidence is recorded in `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md`.
+Phase 31 sandbox review evidence is recorded in `docs/reviews/PHASE31_SANDBOX_HARDENING.md`.
 Those reports are review evidence; this document remains the architecture authority.
 
 ## Non-goals for the current architecture
@@ -244,4 +249,4 @@ It does not implement multi-stage approvals or external identity-provider integr
 
 It does not replace CI/CD. It supplies an evidence-producing admission boundary that can integrate with CI/CD later.
 
-It does not claim full adversarial sandboxing until the outer runtime isolation policy is specified and tested.
+It does not claim VM isolation or portable Rust-created namespaces. Non-Kubernetes production deployments must provide controls equivalent to the documented `kubernetes-restricted` profile.

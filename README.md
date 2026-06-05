@@ -14,7 +14,7 @@
 
 ## Product Overview
 
-The Acceptability Review Engine is an automated gatekeeper that checks software for correctness, safety, and reliability before any code is allowed into production. Acting as an uncompromising, zero-trust validation layer, the application ingests precise code alteration boundaries and subjects submitted patches to a rigorous, isolated execution gauntlet. By combining autonomous kernel-level sandboxing with intelligent error diagnostics and real-time streaming instrumentation, the platform empowers engineering teams to eliminate flawed logic, catch breaking mutations, and verify software compliance completely on autopilot.
+The Acceptability Review Engine is an automated gatekeeper that checks software for correctness, safety, and reliability before any code is allowed into production. Acting as a zero-trust validation layer, the application ingests precise code alteration boundaries and subjects submitted patches to a rigorous execution gauntlet. The Kubernetes deployment combines runtime containment controls with Rust-owned admission decisions, durable evidence, replay, review, and real-time streaming instrumentation.
 
 ---
 
@@ -83,6 +83,15 @@ The engine supports explicit local workspace selection and Git materialization.
 Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under the configured `--workspace` root. Each contract ID resolves to a single child directory under that root, and Gate 2 verifies that directory is a local Git work tree with the requested `base_sha`.
 
 Set `AH_WORKSPACE_MODE=git` to clone the contract repository into `--workspace/<contract-id>` before gate execution. Git mode cleans the selected per-run workspace, clones without recursive submodules, verifies `origin`, detaches `HEAD`, and verifies the requested `base_sha`.
+
+## Sandbox Profile
+
+Set `AH_SANDBOX_PROFILE=development` for local development.
+
+Set `AH_SANDBOX_PROFILE=kubernetes-restricted` for the documented production
+Kubernetes profile. That profile expects non-root execution, no privilege
+escalation, dropped Linux capabilities, RuntimeDefault seccomp, a read-only root
+filesystem, explicit writable mounts, CPU/memory limits, and denied pod egress.
 
 ## Browser UI
 

@@ -4,6 +4,7 @@ mod gates;
 mod orchestrator;
 mod policy;
 mod progress;
+mod sandbox_profile;
 mod server;
 mod store;
 mod workspace;
@@ -68,6 +69,14 @@ async fn main() {
             std::process::exit(3);
         }
     };
+    let sandbox_profile = match sandbox_profile::SandboxProfile::from_env() {
+        Ok(profile) => profile,
+        Err(error) => {
+            eprintln!("PANIC: Invalid sandbox profile configuration: {}", error);
+            std::process::exit(3);
+        }
+    };
+    let _sandbox_model = sandbox_profile.model();
 
     let shared_db = match store::pooled_connection(&args.database) {
         Ok(connection) => connection,
@@ -160,9 +169,10 @@ async fn main() {
     }
 
     println!(
-        "Orchestrator driving contract validation sequence for: {} in {} workspace mode",
+        "Orchestrator driving contract validation sequence for: {} in {} workspace mode with {} sandbox profile",
         contract_payload.id,
-        workspace_mode.as_str()
+        workspace_mode.as_str(),
+        sandbox_profile.as_str()
     );
 
     let artifact_store = store::ArtifactStore::new(args.artifact_root);

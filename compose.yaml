@@ -8,7 +8,15 @@ services:
     environment:
       AH_WORKSPACE_MODE: local
       AH_SECURITY_MODE: disabled
+      AH_SANDBOX_PROFILE: development
       RUST_LOG: core=info
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp
     volumes:
       - acceptability-data:/data
       - acceptability-artifacts:/artifacts

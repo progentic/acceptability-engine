@@ -31,6 +31,7 @@ COPY --from=builder /src/core/target/release/core /usr/local/bin/acceptability-e
 
 USER engine
 ENV AH_WORKSPACE_MODE=local
+ENV AH_SANDBOX_PROFILE=development
 ENV RUST_LOG=core=info
 EXPOSE 8080
 VOLUME ["/data", "/artifacts", "/workspaces"]

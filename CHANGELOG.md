@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.32] - 2026-06-04 - Sandbox Hardening
+
+### Added
+- **Sandbox Profiles** - Added `AH_SANDBOX_PROFILE` validation with `development` and Linux-only `kubernetes-restricted` profiles
+- **Restricted Kubernetes Profile** - Added non-root execution, no privilege escalation, dropped capabilities, RuntimeDefault seccomp, read-only root filesystem, explicit writable mounts, resource limits, and deny-all egress to the Kubernetes manifest
+- **Compose Local Hardening** - Added dropped capabilities, no-new-privileges, read-only root filesystem, and `/tmp` tmpfs for local Compose runs
+- **Phase 31 Sandbox Report** - Added `docs/reviews/PHASE31_SANDBOX_HARDENING.md` with namespace, filesystem, network, syscall, resource, containment, escape, deviation, and validation sections
+- **Sandbox Coverage** - Added tests for sandbox profile defaults, restricted profile validation, unknown profile rejection, and restricted kernel-control declarations
+
+### Changed
+- **Sandbox Architecture** - Documented `kubernetes-restricted` as the production containment baseline and `development` as non-production hardening, with full closure of D25-002 requiring runtime enforcement validation
+- **Sandbox Invariants** - Added fail-closed sandbox profile requirements to the invariant set
+
 ## [0.0.31] - 2026-06-04 - Architecture Review II
 
 ### Added

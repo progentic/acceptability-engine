@@ -69,6 +69,8 @@ spec:
               value: local
             - name: AH_SECURITY_MODE
               value: api-key
+            - name: AH_SANDBOX_PROFILE
+              value: kubernetes-restricted
             - name: AH_API_KEYS
               valueFrom:
                 secretKeyRef:
@@ -79,6 +81,15 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            capabilities:
+              drop:
+                - ALL
           readinessProbe:
             httpGet:
               path: /health/ready
@@ -105,6 +116,12 @@ spec:
               mountPath: /artifacts
             - name: workspaces
               mountPath: /workspaces
+            - name: tmp
+              mountPath: /tmp
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
       volumes:
         - name: data
           persistentVolumeClaim:
@@ -113,6 +130,8 @@ spec:
           persistentVolumeClaim:
             claimName: acceptability-engine-artifacts
         - name: workspaces
+          emptyDir: {}
+        - name: tmp
           emptyDir: {}
 ---
 apiVersion: v1
@@ -128,3 +147,21 @@ spec:
     - name: http
       port: 8080
       targetPort: http
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: acceptability-engine-restricted-network
+  namespace: acceptability-engine
+spec:
+  podSelector:
+    matchLabels:
+      app: acceptability-engine
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - ports:
+        - protocol: TCP
+          port: 8080
+  egress: []

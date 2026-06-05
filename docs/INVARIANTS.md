@@ -247,7 +247,19 @@ Timeout cleanup must terminate the process and descendants where the platform su
 
 A timeout must not be interpreted as a passing gate.
 
-## 23. The change boundary is scope-based
+## 23. Production sandbox profile must fail closed
+
+`development` and `kubernetes-restricted` are the implemented sandbox profiles.
+
+Unset or empty `AH_SANDBOX_PROFILE` means `development`.
+
+The `development` profile is not production containment.
+
+The `kubernetes-restricted` profile requires deployment-enforced namespace, filesystem, network, syscall, and resource controls in addition to Rust runner hardening.
+
+Unknown sandbox profiles must fail at startup.
+
+## 24. The change boundary is scope-based
 
 Gate 3 must compare changed files from `base_sha` to `HEAD`.
 
@@ -255,7 +267,7 @@ Every changed file must fall under one of the contract scopes.
 
 A path such as `src/api_backup/file.rs` must not match scope `src/api`.
 
-## 24. Supply-chain checks are part of admission
+## 25. Supply-chain checks are part of admission
 
 The supply-chain gate is part of the admission sequence.
 
@@ -263,7 +275,7 @@ The supply-chain gate is part of the admission sequence.
 
 A failed supply-chain command rejects the run.
 
-## 25. Metrics are operational signals, not authority
+## 26. Metrics are operational signals, not authority
 
 Prometheus metrics and logs may help operators understand the system.
 
@@ -271,7 +283,7 @@ They do not determine run status.
 
 Durable store state and evidence records are the authoritative record.
 
-## 26. The UI is non-authoritative
+## 27. The UI is non-authoritative
 
 The browser UI may call API endpoints and render their responses.
 
@@ -279,7 +291,7 @@ The UI must not synthesize gate results, rewrite statuses, suppress failures, or
 
 Polling is an observation mechanism. It is not a state transition mechanism.
 
-## 27. API response models must remain explicit
+## 28. API response models must remain explicit
 
 Public API models must use explicit fields.
 
@@ -287,25 +299,25 @@ Do not return unstructured blobs when the domain has known fields.
 
 Typed identifiers should not be interchangeable inside Rust code.
 
-## 28. Migrations must preserve existing evidence
+## 29. Migrations must preserve existing evidence
 
 Schema changes must preserve existing contracts, runs, attempts, gate records, evidence bundles, final decisions, and audit events unless a deliberate destructive migration is documented.
 
 Legacy migration code must attach old gate rows to deterministic attempt records.
 
-## 29. Tests must cover negative paths
+## 30. Tests must cover negative paths
 
 Any new authority path requires tests for failure behavior.
 
 At minimum, tests should cover invalid input, denied authorization, missing records, failed gates, and internal error behavior when that path can produce those outcomes.
 
-## 30. Documentation must match executable behavior
+## 31. Documentation must match executable behavior
 
 Architecture and invariant documentation must be updated when the gate sequence, API surface, state model, workspace model, security model, or persistence model changes.
 
 The README must not claim a capability that the code fails closed on.
 
-## 31. Coding style is part of the architecture
+## 32. Coding style is part of the architecture
 
 Code must follow `docs/CODING_STYLE.md`.
 
