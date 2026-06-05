@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.31] - 2026-06-04 - Architecture Review II
+
+### Added
+- **Phase 30 Review Evidence** - Added `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` with architecture, invariant, policy authority, replay completeness, security boundary, persistence, deviation, roadmap, and invariant assessment sections
+- **Deviation Register Update** - Reconfirmed candidate-change acquisition as a release-critical gap and adversarial sandboxing as the other remaining open production architecture gap
+- **Roadmap Impact Assessment** - Added Phase 30 guidance for sandbox hardening, candidate acquisition, security assessment, governance review, and production release readiness
+
+### Changed
+- **Governance Traceability** - Updated architecture, invariants, and phase map records so Phase 30 review evidence is discoverable from the authoritative documents
+
 ## [0.0.30] - 2026-06-04 - Admission Policy Engine
 
 ### Added

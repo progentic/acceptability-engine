@@ -231,7 +231,8 @@ Run progress is published as ordered WebSocket events. The progress stream is ob
 ## Architecture review record
 
 Phase 25 review evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
-That report is review evidence; this document remains the architecture authority.
+Phase 30 review evidence is recorded in `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md`.
+Those reports are review evidence; this document remains the architecture authority.
 
 ## Non-goals for the current architecture
 

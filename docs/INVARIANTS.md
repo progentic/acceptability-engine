@@ -316,4 +316,5 @@ Avoid hidden state, unnecessary abstraction, deep nesting, swallowed errors, unb
 ## Compliance review record
 
 Phase 25 invariant compliance evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
-That report is review evidence; this document remains the invariant authority.
+Phase 30 invariant compliance evidence is recorded in `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md`.
+Those reports are review evidence; this document remains the invariant authority.

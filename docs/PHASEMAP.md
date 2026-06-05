@@ -573,38 +573,50 @@ Steps
 
 1. Architecture review
 2. Invariant review
-3. Security review
-4. Persistence review
-5. Replay review
+3. Policy authority review
+4. Replay completeness review
+5. Security boundary review
+6. Persistence inventory update
+7. Deviation register update
+8. Roadmap impact assessment
 
 Acceptance Evidence
 
-* architecture review report
-* invariant review report
-* replay review report
-* security review report
-* deviation register
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the architecture review report.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the invariant compliance report.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the policy authority review.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the replay completeness review.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the security boundary review.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the persistence inventory update.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the deviation register update.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` contains the roadmap impact assessment.
+* `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md` confirms whether any new invariant is needed before Phase 31.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* PHASEMAP.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` links to the Phase 30 review record.
+* `INVARIANTS.md` links to the Phase 30 invariant review record.
+* `PHASEMAP.md` records Phase 30 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.31 - Architecture Review II`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
 
 Summary
 
-Architecture remains coherent.
+Architecture remains coherent after policy, replay, retention, review, progress, and tenant hardening.
 
 Notes / Deviations
+
+* `D25-001` remains open and release-critical: Git materialization still lacks candidate-change identity.
+* `D25-002` remains open: process execution is hardened but not a complete adversarial kernel sandbox.
+* `D25-003`, `D25-004`, `D28-001`, `D28-002`, `D29-001`, and `D29-002` remain accepted limitations.
+* No new invariant is required before Phase 31; sandbox hardening is expected to update or add a sandbox invariant.
 
 =====================================================================
 PHASE 31
