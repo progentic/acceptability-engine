@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.38] - 2026-06-05 - Performance Validation
+
+### Added
+- **Phase 36 Performance Report** - Added `docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md` with load, concurrency, queue saturation, storage, validation, and deviation evidence
+
+### Changed
+- **Deployment Performance Baseline** - Updated deployment and phase map documentation with the current bounded queue, single-worker, pooled SQLite, indexed storage, and local read-load validation model
+
 ## [0.0.37] - 2026-06-05 - Release Readiness Review
 
 ### Added

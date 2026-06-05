@@ -885,15 +885,38 @@ PERFORMANCE VALIDATION
 
 Acceptance Evidence
 
-* load testing report
-* concurrency testing report
-* queue saturation report
-* storage performance report
+* `docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md` records the load testing report.
+* `docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md` records the concurrency testing report.
+* `docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md` records the queue saturation report.
+* `docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md` records the storage performance report.
 
 Documentation Updates
 
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `DEPLOYMENT.md` links to the Phase 36 performance baseline and documents current queue, worker, and storage model limits.
+* `PHASEMAP.md` records Phase 36 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.38 - Performance Validation`.
+
+Commands Ran
+
+* Local HTTP read-load smoke: 600 health/readiness/metrics requests, 8 workers, 0 failures
+* `cargo test creates_bounded_run_queue`
+* `cargo test pooled_connection_reuses_file_backed_store`
+* `cargo test creates_production_query_indexes`
+* `cargo test rejects_requests_above_limit`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+* `git diff --check`
+
+Summary
+
+Phase 36 establishes baseline local performance evidence for read availability, queue behavior, request limiting, pooled SQLite access, and indexed storage queries.
+
+Notes / Deviations
+
+* Phase 36 is not a production maximum-throughput benchmark.
+* No long-running soak test or multi-pod Kubernetes load test was executed.
+* Queue depth is not yet exported as a metric.
 
 =====================================================================
 PHASE 37

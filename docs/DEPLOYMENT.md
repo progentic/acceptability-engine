@@ -85,6 +85,24 @@ Optional limits:
 - `AH_RATE_LIMIT_PER_MINUTE`
 - `AH_RUN_QUOTA_PER_HOUR`
 
+## Performance Baseline
+
+Phase 36 performance validation is recorded in
+`docs/reviews/PHASE36_PERFORMANCE_VALIDATION.md`.
+
+The current runtime model is intentionally conservative:
+
+- HTTP submissions enter a bounded queue with capacity 64.
+- One background worker processes gate runs sequentially.
+- SQLite access uses a file-backed pooled connection model with blocking
+  boundaries.
+- Query indexes exist for production read paths.
+
+The Phase 36 local smoke validated health, readiness, and metrics read
+availability under small concurrent load. It is not a production throughput
+claim. Operators should run target-environment load and soak tests before
+raising queue capacity, worker count, or storage limits.
+
 ## Sandbox Profiles
 
 `AH_SANDBOX_PROFILE=development` is the default for local development.
