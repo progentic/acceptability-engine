@@ -267,6 +267,17 @@ Every changed file must fall under one of the contract scopes.
 
 A path such as `src/api_backup/file.rs` must not match scope `src/api`.
 
+Git-mode remote proposed-change admission is not complete until the contract
+has a first-class `candidate_sha`.
+
+When candidate acquisition is implemented, `candidate_sha` is the admitted
+object. Mutable provenance such as `candidate_ref`, branch names, pull request
+refs, or tags must not become admission authority.
+
+When candidate acquisition is implemented, Gate 3 must compare
+`base_sha..candidate_sha` and the workspace `HEAD` must equal `candidate_sha`
+during gate execution.
+
 ## 25. Supply-chain checks are part of admission
 
 The supply-chain gate is part of the admission sequence.

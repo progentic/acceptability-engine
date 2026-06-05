@@ -851,18 +851,32 @@ Non-Goals
 
 Acceptance Evidence
 
-* release readiness report
-* unresolved issue inventory
-* security review inventory
-* architecture review inventory
-* operational review inventory
+* `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the release readiness report.
+* `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the unresolved issue inventory.
+* `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the security review inventory.
+* `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the architecture review inventory.
+* `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the operational review inventory.
+* `docs/reviews/CANDIDATE_ACQUISITION_ARCHITECTURE.md` defines `candidate_sha` as the future admitted object for D25-001 closure.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* PHASEMAP.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` records D25-001 as a release-critical gap and documents `candidate_sha` as the selected future admitted object.
+* `INVARIANTS.md` records that mutable refs must not become admission authority when candidate acquisition is implemented.
+* `PHASEMAP.md` records Phase 35 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.37 - Release Readiness Review`.
+
+Commands Ran
+
+* `git diff --check`
+
+Summary
+
+Phase 35 completes the release-readiness review. The project is not production-release ready until D25-001 candidate acquisition is implemented with `candidate_sha` as the admitted object.
+
+Notes / Deviations
+
+* D25-001 remains blocking for production release.
+* D25-002 is narrowed by Phase 31 and remains a managed risk for Phase 37 security assessment.
 
 =====================================================================
 PHASE 36

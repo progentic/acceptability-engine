@@ -172,6 +172,23 @@ The contract id must be a single safe path segment. It must not escape the works
 
 In Git mode, the worker materializes the repository into the same runtime workspace path before gate execution. The materializer rejects unsafe roots and symlink workspace targets, cleans any stale per-run workspace, clones the contract repository without recursive submodules, verifies `origin`, and detaches `HEAD` at the requested `base_sha`.
 
+Git mode is not yet a complete remote proposed-change admission model. The
+release-critical D25-001 gap is candidate acquisition: the contract does not
+yet identify a first-class proposed change.
+
+The selected future model is:
+
+```text
+repo_url + base_sha + candidate_sha = admitted change boundary
+```
+
+`candidate_sha` is the admitted object. `candidate_ref` may be added later as
+provenance metadata only. Branch names, pull request refs, tags, and other
+mutable names must not become admission authority.
+
+When implemented, Gate 3 must evaluate `base_sha..candidate_sha` and the
+workspace `HEAD` must equal `candidate_sha` during gate execution.
+
 ## Sandbox and execution model
 
 Gate commands execute through the process execution boundary.

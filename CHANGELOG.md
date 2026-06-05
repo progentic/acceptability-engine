@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.37] - 2026-06-05 - Release Readiness Review
+
+### Added
+- **Phase 35 Release Review** - Added `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` with release result, unresolved issue inventory, security review inventory, architecture review inventory, operational review inventory, and release gate criteria
+- **Candidate Acquisition Architecture** - Added `docs/reviews/CANDIDATE_ACQUISITION_ARCHITECTURE.md` defining `candidate_sha` as the future first-class admitted object for D25-001 closure
+
+### Changed
+- **Release Readiness Governance** - Updated architecture, invariants, and phase map records to classify D25-001 candidate acquisition as the remaining blocking production-release gap
+- **Candidate Authority Model** - Documented that future `candidate_ref` metadata must not become admission authority and that Gate 3 must compare `base_sha..candidate_sha` once candidate acquisition is implemented
+
 ## [0.0.36] - 2026-06-05 - Browser UI Theme Refresh
 
 ### Added
