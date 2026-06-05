@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.33] - 2026-06-04 - Operational Readiness
+
+### Added
+- **Operations Index** - Added `docs/OPERATIONS.md` with runbook links, monitoring inventory, metrics inventory, alert definitions, operator invariants, and Phase 32 validation evidence
+- **Startup Runbook** - Added startup checks for deployment mode, production environment, writable paths, API key placeholder detection, Compose startup, Kubernetes startup, and readiness validation
+- **Shutdown Runbook** - Added evidence-preserving Compose and Kubernetes shutdown procedures
+- **Retention Runbook** - Added artifact retention dry-run, live deletion, success criteria, and restore handoff procedures
+- **Replay Runbook** - Added read-only replay procedure, output handling, success criteria, and missing-run handling
+- **Incident Response Runbook** - Added first-response checks, triage table, escalation evidence, and recovery handoffs
+- **Restore Runbook** - Added manual restore order and validation procedure for SQLite and artifact recovery ahead of Phase 33 validation
+- **Phase 32 Operational Report** - Added `docs/reviews/PHASE32_OPERATIONAL_READINESS.md` with procedure, monitoring, alert, authority, deferred-validation, and command evidence
+
+### Changed
+- **Operational Documentation** - Updated deployment and phase map records so health, metrics, retention, replay, incidents, and restore procedures are discoverable from the authoritative docs
+- **Observability Framing** - Clarified that metrics are operational observations and do not replace durable SQLite and artifact evidence
+
 ## [0.0.32] - 2026-06-04 - Sandbox Hardening
 
 ### Added

@@ -682,25 +682,56 @@ PHASE 32
 OPERATIONAL READINESS
 =====================
 
+Task
+
+Document operator procedures.
+
+Goal
+
+Make the runtime operable by a human without changing admission authority.
+
+Non-Goals
+
+* New admission behavior
+* Automated backup validation
+* Disaster recovery exercise
+
 Acceptance Evidence
 
-* runbooks
-* operational procedures
-* alert validation
-* monitoring validation
+* `docs/OPERATIONS.md` indexes operational procedures, monitoring inventory, metrics inventory, and alert definitions.
+* `docs/runbooks/startup.md` documents startup checks, Compose startup, Kubernetes startup, readiness checks, and failure handoff.
+* `docs/runbooks/shutdown.md` documents evidence-preserving shutdown.
+* `docs/runbooks/retention.md` documents dry-run and live artifact retention procedures.
+* `docs/runbooks/replay.md` documents read-only replay procedures and output handling.
+* `docs/runbooks/incident_response.md` documents first response, triage, escalation evidence, and recovery handoff.
+* `docs/runbooks/restore.md` documents the manual restore procedure that Phase 33 must validate.
+* `docs/reviews/PHASE32_OPERATIONAL_READINESS.md` records the operator procedure inventory, monitoring inventory, alert inventory, authority review, deferred validation, and command evidence.
+* Alert definitions map liveness, readiness, restart, denial-spike, artifact-pressure, replay, and restore conditions to runbooks.
+* Monitoring validation maps health endpoints, metrics, probes, audit events, and replay reports to operator meaning.
 
 Documentation Updates
 
-* DEPLOYMENT.md
-* CHANGELOG.md
+* `DEPLOYMENT.md` links to the operations index and clarifies metrics as observational.
+* `PHASEMAP.md` records Phase 32 acceptance evidence.
+* `docs/reviews/PHASE32_OPERATIONAL_READINESS.md` records Phase 32 validation evidence.
+* `CHANGELOG.md` records version `0.0.33 - Operational Readiness`.
 
 Commands Ran
 
-cargo fmt -- --check
+* `cargo fmt -- --check`
 
-cargo clippy -- -D warnings
+* `cargo clippy -- -D warnings`
 
-cargo test
+* `cargo test`
+
+Summary
+
+Operational readiness now has runbooks, alert definitions, monitoring inventory, metrics inventory, and manual recovery procedures.
+
+Notes / Deviations
+
+* Backup and restore validation is intentionally deferred to Phase 33.
+* Disaster recovery exercise evidence is intentionally deferred to Phase 34.
 
 =====================================================================
 PHASE 33

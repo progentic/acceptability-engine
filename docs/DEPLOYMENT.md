@@ -6,6 +6,9 @@
 - `GET /health/ready` checks SQLite readiness.
 - `GET /metrics` exposes Prometheus text metrics.
 
+Operational runbooks, alert definitions, and monitoring inventories are indexed
+in `docs/OPERATIONS.md`.
+
 ## Container
 
 Build the runtime image:
@@ -108,3 +111,6 @@ The `/metrics` endpoint includes:
 - `acceptability_http_responses_total`
 - `acceptability_runs_submitted_total`
 - `acceptability_security_denials_total`
+
+Operators should treat metrics as operational observations. Durable admission
+state remains in SQLite and filesystem evidence artifacts.
