@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.45] - 2026-06-06 - Production Governance Review
+
+### Added
+- **Phase 40 Governance Review** - Added `docs/reviews/PHASE40_PRODUCTION_GOVERNANCE_REVIEW.md` with threat model, current sandbox controls, residual risks, deployment assumptions, risk acceptance decision, and Phase 41 readiness determination
+
+### Changed
+- **D25-002 Governance Disposition** - Accepted D25-002 as v1.0 residual risk for controlled Kubernetes deployments using the `kubernetes-restricted` profile plus Rust runner hardening
+- **Release Roadmap Status** - Updated architecture, invariants, and PHASEMAP review records to carry Phase 40 evidence and mark Phase 41 ready to proceed
+
 ## [0.0.44] - 2026-06-06 - Release Candidate Evidence
 
 ### Added

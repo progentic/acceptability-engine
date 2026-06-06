@@ -250,6 +250,7 @@ Phase 25 review evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIE
 Phase 30 review evidence is recorded in `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md`.
 Phase 31 sandbox review evidence is recorded in `docs/reviews/PHASE31_SANDBOX_HARDENING.md`.
 Phase 37 security assessment evidence is recorded in `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md`.
+Phase 40 production governance evidence is recorded in `docs/reviews/PHASE40_PRODUCTION_GOVERNANCE_REVIEW.md`.
 Those reports are review evidence; this document remains the architecture authority.
 
 ## Non-goals for the current architecture

@@ -1129,11 +1129,11 @@ Non-Goals
 
 Acceptance Evidence
 
-* final architecture review
-* final invariant review
-* final security review
-* final operational review
-* final deviation register
+* `docs/reviews/PHASE40_PRODUCTION_GOVERNANCE_REVIEW.md` records the production governance decision.
+* Release candidate `v0.0.44-rc.1` is reviewed.
+* D25-002 is evaluated against current controls, residual risks, and deployment assumptions.
+* D25-002 is accepted as v1.0 residual risk for the documented deployment model.
+* Phase 41 readiness determination records that no open release blocker remains.
 
 Documentation Updates
 
@@ -1141,6 +1141,32 @@ Documentation Updates
 * INVARIANTS.md
 * PHASEMAP.md
 * CHANGELOG.md
+
+Commands Ran
+
+* `git diff --check`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+* `cargo deny check`
+* `cargo audit --no-fetch --stale`
+* `docker --version`
+* `docker-compose --version`
+* `docker-compose config`
+* `docker compose version`
+* `docker info`
+
+Summary
+
+Phase 40 accepts D25-002 as v1.0 residual risk for controlled Kubernetes
+deployments using the `kubernetes-restricted` profile plus Rust runner
+hardening. Phase 41 may proceed.
+
+Notes / Deviations
+
+* D25-002 acceptance is scoped to the documented deployment assumptions.
+* Local Docker client and standalone Docker Compose exist; Docker daemon availability was not present during supplemental validation.
+* Stronger isolation remains future hardening, not a v1.0 release blocker under the accepted deployment model.
 
 ===================================
 PHASE 41 PRODUCTION RELEASE (v1.0)
