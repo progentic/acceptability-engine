@@ -39,6 +39,8 @@ Request:
   "id": "run-001",
   "repo_url": "https://github.com/progentic/acceptability-engine.git",
   "base_sha": "a9993e364706816aba3e25717850c26c9cd0d89d",
+  "candidate_sha": "b9993e364706816aba3e25717850c26c9cd0d89d",
+  "candidate_ref": "refs/pull/12/head",
   "scopes": ["core/src"],
   "requires_human_review": true,
   "admission_policy": {
@@ -52,6 +54,8 @@ Request:
   }
 }
 ```
+
+`candidate_sha` is required and is the authoritative admitted object. `candidate_ref` is optional provenance metadata only; it must not decide what change is admitted.
 
 `admission_policy` is optional. When omitted, the server applies `strict-v1`.
 Unknown policy ids, unsupported policy versions, disabled mandatory gate checks, duplicate required gates, or reordered required gates are rejected during contract validation.

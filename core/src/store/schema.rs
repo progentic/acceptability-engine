@@ -14,6 +14,7 @@ const REBUILD_EVIDENCE_BUNDLES_SQL: &str =
 const SECURITY_TRUST_SQL: &str = include_str!("../../migrations/0008_security_trust.sql");
 const REVIEW_DECISIONS_SQL: &str = include_str!("../../migrations/0009_review_decisions.sql");
 const ADMISSION_POLICY_SQL: &str = include_str!("../../migrations/0010_admission_policy.sql");
+const CANDIDATE_IDENTITY_SQL: &str = include_str!("../../migrations/0011_candidate_identity.sql");
 
 pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     create_core_tables(conn)?;
@@ -23,6 +24,7 @@ pub(super) fn init_schema(conn: &Connection) -> Result<(), StoreError> {
     normalize_security_trust_tables(conn)?;
     normalize_review_decision_tables(conn)?;
     normalize_admission_policy_tables(conn)?;
+    normalize_candidate_identity_tables(conn)?;
     create_query_indexes(conn)?;
     Ok(())
 }
@@ -120,6 +122,34 @@ fn normalize_admission_policy_tables(conn: &Connection) -> Result<(), StoreError
         "TEXT NOT NULL DEFAULT '{\"id\":\"strict-v1\",\"version\":1,\"rules\":{\"require_all_gates_pass\":true,\"required_gates\":[1,2,3,4,5,6,7,8],\"max_test_parse_errors\":0}}'",
     )?;
     execute_migration(conn, ADMISSION_POLICY_SQL)
+}
+
+fn normalize_candidate_identity_tables(conn: &Connection) -> Result<(), StoreError> {
+    if !table_has_column(conn, "contracts", "candidate_sha")?
+        && !table_has_column(conn, "contracts", "candidate_ref")?
+    {
+        execute_migration(conn, CANDIDATE_IDENTITY_SQL)?;
+        return Ok(());
+    }
+    add_text_column_if_missing(conn, "contracts", "candidate_sha", "TEXT")?;
+    add_text_column_if_missing(conn, "contracts", "candidate_ref", "TEXT")?;
+    add_text_column_if_missing(
+        conn,
+        "contracts",
+        "scopes_json",
+        "TEXT NOT NULL DEFAULT '[]'",
+    )?;
+    backfill_candidate_sha(conn)
+}
+
+fn backfill_candidate_sha(conn: &Connection) -> Result<(), StoreError> {
+    conn.execute_batch(
+        "UPDATE contracts
+         SET candidate_sha = base_sha
+         WHERE candidate_sha IS NULL OR candidate_sha = '';",
+    )
+    .map_err(|source| StoreError::MigrationFailed { source })?;
+    Ok(())
 }
 
 fn create_query_indexes(conn: &Connection) -> Result<(), StoreError> {

@@ -28,6 +28,9 @@ pub struct ReplayContract {
     pub id: String,
     pub repo_url: String,
     pub base_sha: String,
+    pub candidate_sha: String,
+    pub candidate_ref: Option<String>,
+    pub scopes: Vec<String>,
     pub requires_human_review: bool,
     pub policy_json: String,
 }
@@ -152,6 +155,7 @@ fn replay_header(conn: &Connection, run_id: RunId) -> Result<Option<ReplayHeader
     let mut stmt = conn
         .prepare(
             "SELECT contracts.id, contracts.repo_url, contracts.base_sha,
+                    contracts.candidate_sha, contracts.candidate_ref, contracts.scopes_json,
                     contracts.requires_human_review, contracts.policy_json,
                     runs.id, runs.status, runs.created_at
              FROM runs
@@ -288,13 +292,16 @@ fn replay_header_from_row(row: &Row<'_>) -> Result<ReplayHeader, StoreError> {
             id: read(row, 0)?,
             repo_url: read(row, 1)?,
             base_sha: read(row, 2)?,
-            requires_human_review: read_bool(row, 3)?,
-            policy_json: read(row, 4)?,
+            candidate_sha: read(row, 3)?,
+            candidate_ref: read(row, 4)?,
+            scopes: read_json(row, 5)?,
+            requires_human_review: read_bool(row, 6)?,
+            policy_json: read(row, 7)?,
         },
         run: ReplayRun {
-            run_id: RunId::new(read(row, 5)?),
-            status: read(row, 6)?,
-            created_at: read(row, 7)?,
+            run_id: RunId::new(read(row, 8)?),
+            status: read(row, 9)?,
+            created_at: read(row, 10)?,
         },
     })
 }
@@ -434,6 +441,11 @@ fn read<T: rusqlite::types::FromSql>(row: &Row<'_>, index: usize) -> Result<T, S
         .map_err(|source| StoreError::QueryFailed { source })
 }
 
+fn read_json<T: serde::de::DeserializeOwned>(row: &Row<'_>, index: usize) -> Result<T, StoreError> {
+    let json: String = read(row, index)?;
+    serde_json::from_str(&json).map_err(|source| StoreError::SerializationFailed { source })
+}
+
 fn read_bool(row: &Row<'_>, index: usize) -> Result<bool, StoreError> {
     read::<i64>(row, index).map(|value| value != 0)
 }
@@ -477,6 +489,7 @@ mod tests {
         let report = replay_run(&conn, &artifact_store, run_id).unwrap().unwrap();
 
         assert_eq!(report.contract.id, "replay-run");
+        assert_eq!(report.contract.scopes, vec!["core/src".to_string()]);
         assert_eq!(report.run.run_id, run_id);
         assert_eq!(report.attempts.len(), 1);
         assert_eq!(report.attempts[0].gates[0].gate_num, 1);
@@ -648,6 +661,8 @@ mod tests {
             id: "replay-run".to_string(),
             repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["core/src".to_string()],
             requires_human_review: true,
             admission_policy: crate::policy::AdmissionPolicy::default(),

@@ -236,7 +236,7 @@ Acceptance Evidence
 * Git mode cleans only the selected per-run workspace before cloning.
 * Git mode clones without recursive submodules.
 * Git mode rejects unsafe roots and symlink workspace targets before cleanup.
-* Git mode detaches `HEAD` at the requested `base_sha` before gate execution.
+* Git mode detached `HEAD` at the requested `base_sha` at Phase 21 closure; the D25-001 closure track later changed Git mode to detach `HEAD` at `candidate_sha`.
 * Git mode verifies `origin` matches the contract repository URL.
 * Tests cover clone, checkout, cleanup, malicious path rejection, unsafe root rejection, symlink rejection, detached HEAD validation, and repository origin validation.
 
@@ -320,7 +320,7 @@ Architecture remains aligned with documented Phase 25 deviations.
 
 Notes / Deviations
 
-* `D25-001` remains open: Git mode materializes `base_sha` but does not yet model candidate-change acquisition.
+* `D25-001` remained open at Phase 25 closure: Git mode materialized `base_sha` but did not yet model candidate-change acquisition. It is closed by the candidate acquisition implementation track below.
 * `D25-002` remains open: process execution is hardened but not a complete adversarial kernel sandbox.
 * `D25-003` is an accepted limitation: WebSocket replay is bounded and in memory.
 * `D25-004` is an accepted limitation: API-key security does not include external identity providers.
@@ -613,7 +613,7 @@ Architecture remains coherent after policy, replay, retention, review, progress,
 
 Notes / Deviations
 
-* `D25-001` remains open and release-critical: Git materialization still lacks candidate-change identity.
+* `D25-001` remained open and release-critical at Phase 30 closure. It is closed by the candidate acquisition implementation track below.
 * `D25-002` remains open: process execution is hardened but not a complete adversarial kernel sandbox.
 * `D25-003`, `D25-004`, `D28-001`, `D28-002`, `D29-001`, and `D29-002` remain accepted limitations.
 * No new invariant is required before Phase 31; sandbox hardening is expected to update or add a sandbox invariant.
@@ -674,7 +674,7 @@ Notes / Deviations
 * `D25-002` is narrowed for the documented `kubernetes-restricted` profile; full closure requires runtime enforcement validation on Kubernetes.
 * `D31-001` is an accepted limitation: `development` is not production containment.
 * `D31-002` is an accepted limitation: non-Kubernetes production deployments must provide equivalent controls.
-* `D31-003` is an accepted limitation: Git materialization with denied egress needs a future controlled egress design and remains constrained by D25-001.
+* `D31-003` is an accepted limitation: Git materialization with denied egress needs a future controlled egress design.
 * `docker compose config` could not be run because Docker is unavailable in the local environment. Compose YAML was shape-validated by Ruby. Full Compose validation remains required where Docker is installed.
 
 =====================================================================
@@ -856,12 +856,12 @@ Acceptance Evidence
 * `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the security review inventory.
 * `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the architecture review inventory.
 * `docs/reviews/PHASE35_RELEASE_READINESS_REVIEW.md` records the operational review inventory.
-* `docs/reviews/CANDIDATE_ACQUISITION_ARCHITECTURE.md` defines `candidate_sha` as the future admitted object for D25-001 closure.
+* `docs/reviews/CANDIDATE_ACQUISITION_ARCHITECTURE.md` defined `candidate_sha` as the selected admitted object for D25-001 closure.
 
 Documentation Updates
 
-* `ARCHITECTURE.md` records D25-001 as a release-critical gap and documents `candidate_sha` as the selected future admitted object.
-* `INVARIANTS.md` records that mutable refs must not become admission authority when candidate acquisition is implemented.
+* `ARCHITECTURE.md` recorded D25-001 as a release-critical gap and documented `candidate_sha` as the selected admitted object.
+* `INVARIANTS.md` recorded that mutable refs must not become admission authority.
 * `PHASEMAP.md` records Phase 35 acceptance evidence.
 * `CHANGELOG.md` records version `0.0.37 - Release Readiness Review`.
 
@@ -871,11 +871,11 @@ Commands Ran
 
 Summary
 
-Phase 35 completes the release-readiness review. The project is not production-release ready until D25-001 candidate acquisition is implemented with `candidate_sha` as the admitted object.
+Phase 35 completed the release-readiness review. At Phase 35 closure, the project was not production-release ready until D25-001 candidate acquisition was implemented with `candidate_sha` as the admitted object.
 
 Notes / Deviations
 
-* D25-001 remains blocking for production release.
+* D25-001 was blocking at Phase 35 closure and is closed by the candidate acquisition implementation track below.
 * D25-002 is narrowed by Phase 31 and remains a managed risk for Phase 37 security assessment.
 
 =====================================================================
@@ -917,6 +917,56 @@ Notes / Deviations
 * Phase 36 is not a production maximum-throughput benchmark.
 * No long-running soak test or multi-pod Kubernetes load test was executed.
 * Queue depth is not yet exported as a metric.
+
+=====================================================================
+CANDIDATE ACQUISITION IMPLEMENTATION TRACK
+D25-001 CLOSURE
+================
+
+Task
+
+Close the release-critical admitted-object gap identified by Phase 25, Phase 30, and Phase 35.
+
+Goal
+
+Make `candidate_sha` the first-class admitted object for Git-mode admission.
+
+Non-Goals
+
+* Patch upload admission
+* Archive admission
+* Pull-request-number admission
+* Mutable-ref admission authority
+
+Acceptance Evidence
+
+* Contracts require and validate `candidate_sha`.
+* Contracts preserve optional `candidate_ref` as provenance metadata only.
+* SQLite contracts persist `candidate_sha`, optional `candidate_ref`, and `scopes_json`.
+* Legacy contract rows are migrated by backfilling `candidate_sha = base_sha` and `scopes_json = []`.
+* Git materialization validates `base_sha`, validates `candidate_sha`, checks out `candidate_sha`, and verifies workspace `HEAD == candidate_sha`.
+* Gate 3 evaluates `base_sha..candidate_sha`.
+* Replay output includes `candidate_sha`, optional `candidate_ref`, and scopes.
+* Policy evaluation trace includes candidate identity.
+* Browser UI submission and detail models expose candidate identity.
+* `docs/reviews/CANDIDATE_ACQUISITION_ARCHITECTURE.md` records D25-001 closure.
+
+Documentation Updates
+
+* `ARCHITECTURE.md` records candidate-SHA admission as implemented.
+* `INVARIANTS.md` records the candidate-based change boundary.
+* `API.md` documents `candidate_sha` and optional `candidate_ref`.
+* `PHASEMAP.md` records D25-001 closure evidence.
+* `CHANGELOG.md` records version `0.0.39 - Candidate SHA Admission Boundary`.
+
+Summary
+
+D25-001 is closed for commit-SHA candidate admission. The authoritative admitted object is `candidate_sha`; the admission boundary includes `repo_url`, `base_sha`, `candidate_sha`, scopes, and admission policy. `candidate_ref` remains provenance metadata only.
+
+Notes / Deviations
+
+* Legacy rows are preserved by setting missing `candidate_sha` to `base_sha` and missing scopes to `[]`; that migration is compatibility evidence, not proof that legacy rows represented remote candidate admission.
+* Patch, archive, and pull-request-number admission remain out of scope.
 
 =====================================================================
 PHASE 37

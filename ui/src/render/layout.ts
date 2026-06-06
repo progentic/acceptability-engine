@@ -49,6 +49,8 @@ export function renderLayout(): void {
                 <input id="contract-id" placeholder="contract id" required />
                 <input id="repo-url" placeholder="repo url" required />
                 <input id="base-sha" placeholder="base sha" required />
+                <input id="candidate-sha" placeholder="candidate sha" required />
+                <input id="candidate-ref" placeholder="candidate ref (optional)" />
                 <input id="scopes" placeholder="scopes, comma-separated" required />
                 <label class="check-row">
                   <input id="human-review" type="checkbox" />

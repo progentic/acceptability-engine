@@ -22,6 +22,10 @@ The system has strong evidence, review, recovery, operations, replay, policy,
 tenant, and sandbox posture for its current stage. It still lacks a first-class
 model for the proposed Git change being admitted.
 
+Post-review status: the subsequent candidate acquisition implementation track
+closes D25-001 for commit-SHA admission. This review remains the historical
+record of the Phase 35 gate result.
+
 ## Capability Inventory
 
 | Capability | Status | Evidence |
@@ -29,7 +33,7 @@ model for the proposed Git change being admitted.
 | Rust authority model | Complete | `docs/ARCHITECTURE.md`, `docs/INVARIANTS.md` |
 | Human review | Complete | Review endpoints, review decisions, final decisions |
 | Progress streaming | Complete | WebSocket progress route and bounded replay |
-| Git materialization | Partial | Repository clone and `base_sha` checkout exist; candidate identity is missing |
+| Git materialization | Partial at Phase 35 | Repository clone and `base_sha` checkout existed; candidate identity was added by the subsequent D25-001 closure track |
 | Tenant isolation | Complete | Tenant-scoped reads and denial audit evidence |
 | Artifact retention | Complete | Retention CLI and audit evidence |
 | Replay | Complete | Read-only replay reports |
@@ -44,7 +48,7 @@ model for the proposed Git change being admitted.
 
 | ID | Severity | Status | Release Impact |
 | :--- | :--- | :--- | :--- |
-| D25-001 | Blocking | Open | The engine does not yet identify the proposed Git change as a first-class admitted object. |
+| D25-001 | Blocking at Phase 35 | Closed after review | The engine did not yet identify the proposed Git change as a first-class admitted object at Phase 35 closure. |
 | D25-002 | Managed risk | Narrowed | Production containment depends on documented Kubernetes/container controls plus runner hardening. |
 | D25-004 | Accepted limitation | Open by design | API-key identity remains deployment-specific until external identity is required. |
 
@@ -56,7 +60,7 @@ model for the proposed Git change being admitted.
 | Repository authorization | Ready for Phase 37 assessment | Repository policy runs before submission. |
 | Sandbox profile | Ready for Phase 37 assessment | Production profile is documented, but runtime enforcement should be assessed in target Kubernetes. |
 | API-key identity | Accepted limitation | External identity provider integration remains deployment-specific. |
-| Candidate acquisition | Blocking | `candidate_sha` must be added before production release. |
+| Candidate acquisition | Closed after review | `candidate_sha` was added by the subsequent D25-001 closure track. |
 
 ## Architecture Review Inventory
 
@@ -64,7 +68,7 @@ model for the proposed Git change being admitted.
 | :--- | :--- |
 | Phase 25 Architecture Review I | Identified D25-001 and D25-002. |
 | Phase 30 Architecture Review II | Reconfirmed D25-001 as release-critical. |
-| Candidate Acquisition Architecture | Defines `candidate_sha` as the future admitted object. |
+| Candidate Acquisition Architecture | Defines `candidate_sha` as the admitted object. |
 | Phase 31 Sandbox Hardening | Narrows D25-002 for `kubernetes-restricted`. |
 
 ## Operational Review Inventory

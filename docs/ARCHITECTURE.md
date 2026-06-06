@@ -4,7 +4,7 @@
 
 The Acceptability Review Engine is a gatekeeper for proposed code changes.
 
-The concrete object that enters the system is a contract. A contract names a repository, a base commit, the allowed change scopes, and whether a human must review the result. The engine turns that contract into a run. A run creates one or more attempts. Each attempt executes a fixed sequence of gates. The system records the result, the gate telemetry, and the evidence artifacts.
+The concrete object that enters the system is a contract. A contract names a repository, a base commit, a candidate commit, the allowed change scopes, the admission policy, and whether a human must review the result. The engine turns that contract into a run. A run creates one or more attempts. Each attempt executes a fixed sequence of gates. The system records the result, the gate telemetry, and the evidence artifacts.
 
 The problem this solves is uncontrolled code admission. Generated code, agent-produced patches, and human-submitted changes can be useful, but they are not trusted merely because they were produced. The engine makes acceptance explicit. A change is admissible only after the required checks pass and any required human review is completed.
 
@@ -120,7 +120,7 @@ Gate 1 validates the contract shape.
 
 Gate 2 verifies that the selected local workspace exists, is a directory, is a Git work tree, and contains the requested base commit.
 
-Gate 3 compares `base_sha` to `HEAD` and rejects changed files outside the contract scopes.
+Gate 3 compares `base_sha..candidate_sha` and rejects changed files outside the contract scopes.
 
 Gate 4 runs `cargo fmt -- --check`.
 
@@ -170,24 +170,19 @@ workspace_root / contract.id
 
 The contract id must be a single safe path segment. It must not escape the workspace root.
 
-In Git mode, the worker materializes the repository into the same runtime workspace path before gate execution. The materializer rejects unsafe roots and symlink workspace targets, cleans any stale per-run workspace, clones the contract repository without recursive submodules, verifies `origin`, and detaches `HEAD` at the requested `base_sha`.
+In Git mode, the worker materializes the repository into the same runtime workspace path before gate execution. The materializer rejects unsafe roots and symlink workspace targets, cleans any stale per-run workspace, clones the contract repository without recursive submodules, verifies `origin`, verifies `base_sha`, verifies `candidate_sha`, verifies `base_sha` is an ancestor of `candidate_sha`, detaches `HEAD` at `candidate_sha`, and verifies the workspace `HEAD`.
 
-Git mode is not yet a complete remote proposed-change admission model. The
-release-critical D25-001 gap is candidate acquisition: the contract does not
-yet identify a first-class proposed change.
-
-The selected future model is:
+The admitted change boundary is:
 
 ```text
 repo_url + base_sha + candidate_sha = admitted change boundary
 ```
 
-`candidate_sha` is the admitted object. `candidate_ref` may be added later as
-provenance metadata only. Branch names, pull request refs, tags, and other
-mutable names must not become admission authority.
+The admission boundary also includes the contract scopes and admission policy.
 
-When implemented, Gate 3 must evaluate `base_sha..candidate_sha` and the
-workspace `HEAD` must equal `candidate_sha` during gate execution.
+`candidate_sha` is the admitted object. `candidate_ref` is optional provenance metadata and may be used only as a fetch hint or operator explanation. Branch names, pull request refs, tags, and other mutable names must not become admission authority.
+
+Gate 3 evaluates `base_sha..candidate_sha` and the workspace `HEAD` must equal `candidate_sha` during gate execution.
 
 ## Sandbox and execution model
 

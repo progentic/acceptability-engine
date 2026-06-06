@@ -54,7 +54,13 @@ fn fetch_run_header(
     run_id: RunId,
 ) -> Result<Option<RunStatusSummary>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE id = ?1")
+        .prepare(
+            "SELECT runs.id, runs.contract_id, contracts.base_sha, contracts.candidate_sha,
+                    contracts.candidate_ref, runs.status, runs.created_at
+             FROM runs
+             JOIN contracts ON contracts.id = runs.contract_id
+             WHERE runs.id = ?1",
+        )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let mut rows = stmt
         .query(rusqlite::params![run_id.get()])
@@ -152,7 +158,14 @@ fn query_run_list_by_status(
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE tenant_id = ?1 AND status = ?2 ORDER BY created_at DESC LIMIT ?3 OFFSET ?4")
+        .prepare(
+            "SELECT runs.id, runs.contract_id, contracts.base_sha, contracts.candidate_sha,
+                    contracts.candidate_ref, runs.status, runs.created_at
+             FROM runs
+             JOIN contracts ON contracts.id = runs.contract_id
+             WHERE runs.tenant_id = ?1 AND runs.status = ?2
+             ORDER BY runs.created_at DESC LIMIT ?3 OFFSET ?4",
+        )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
         .query(rusqlite::params![tenant_id, status, limit, offset])
@@ -167,7 +180,14 @@ fn query_run_list_without_status(
     offset: u32,
 ) -> Result<Vec<RunListItem>, StoreError> {
     let mut stmt = conn
-        .prepare("SELECT id, contract_id, status, created_at FROM runs WHERE tenant_id = ?1 ORDER BY created_at DESC LIMIT ?2 OFFSET ?3")
+        .prepare(
+            "SELECT runs.id, runs.contract_id, contracts.base_sha, contracts.candidate_sha,
+                    contracts.candidate_ref, runs.status, runs.created_at
+             FROM runs
+             JOIN contracts ON contracts.id = runs.contract_id
+             WHERE runs.tenant_id = ?1
+             ORDER BY runs.created_at DESC LIMIT ?2 OFFSET ?3",
+        )
         .map_err(|source| StoreError::QueryFailed { source })?;
     let rows = stmt
         .query(rusqlite::params![tenant_id, limit, offset])

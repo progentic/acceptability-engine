@@ -1,3 +1,4 @@
+use crate::contract::Contract;
 use crate::error::validation::ValidationError;
 use crate::gates::result::GateOutput;
 use serde::{Deserialize, Serialize};
@@ -38,10 +39,19 @@ pub struct PolicyEvaluation {
 
 #[derive(Serialize)]
 struct PolicyTrace {
+    candidate: CandidateTrace,
     policy_id: String,
     policy_version: u32,
     required_gates: Vec<u8>,
     gate_results: Vec<GateTrace>,
+}
+
+#[derive(Serialize)]
+struct CandidateTrace {
+    repo_url: String,
+    base_sha: String,
+    candidate_sha: String,
+    candidate_ref: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -80,8 +90,12 @@ impl AdmissionPolicy {
     }
 }
 
-pub fn evaluate_policy(gate_outputs: &[GateOutput], policy: &AdmissionPolicy) -> PolicyEvaluation {
-    let trace = policy_trace(gate_outputs, policy);
+pub fn evaluate_policy(
+    gate_outputs: &[GateOutput],
+    policy: &AdmissionPolicy,
+    contract: &Contract,
+) -> PolicyEvaluation {
+    let trace = policy_trace(gate_outputs, policy, contract);
     let reason = policy_rejection_reason(gate_outputs, &policy.rules);
     PolicyEvaluation {
         policy_id: policy.id.clone(),
@@ -208,12 +222,26 @@ fn test_parse_error_reason(
         })
 }
 
-fn policy_trace(gate_outputs: &[GateOutput], policy: &AdmissionPolicy) -> PolicyTrace {
+fn policy_trace(
+    gate_outputs: &[GateOutput],
+    policy: &AdmissionPolicy,
+    contract: &Contract,
+) -> PolicyTrace {
     PolicyTrace {
+        candidate: candidate_trace(contract),
         policy_id: policy.id.clone(),
         policy_version: policy.version,
         required_gates: policy.rules.required_gates.clone(),
         gate_results: gate_outputs.iter().map(gate_trace).collect(),
+    }
+}
+
+fn candidate_trace(contract: &Contract) -> CandidateTrace {
+    CandidateTrace {
+        repo_url: contract.repo_url.clone(),
+        base_sha: contract.base_sha.clone(),
+        candidate_sha: contract.candidate_sha.clone(),
+        candidate_ref: contract.candidate_ref.clone(),
     }
 }
 
@@ -273,7 +301,7 @@ mod tests {
     fn default_policy_passes_all_required_gates() {
         let outputs = passing_gates();
 
-        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default());
+        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default(), &test_contract());
 
         assert!(evaluation.passed);
     }
@@ -282,7 +310,7 @@ mod tests {
     fn policy_rejects_missing_required_gate() {
         let outputs = vec![GateOutput::Simple(GateResult::pass(1, "ok"))];
 
-        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default());
+        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default(), &test_contract());
 
         assert!(!evaluation.passed);
         assert!(evaluation.reason.contains("missing required gate 2"));
@@ -299,10 +327,22 @@ mod tests {
             ..TestMetrics::default()
         });
 
-        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default());
+        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default(), &test_contract());
 
         assert!(!evaluation.passed);
         assert!(evaluation.reason.contains("parse errors"));
+    }
+
+    #[test]
+    fn policy_trace_records_candidate_identity() {
+        let outputs = passing_gates();
+
+        let evaluation = evaluate_policy(&outputs, &AdmissionPolicy::default(), &test_contract());
+
+        assert!(evaluation.trace_json.contains("\"candidate_sha\""));
+        assert!(evaluation
+            .trace_json
+            .contains("b9993e364706816aba3e25717850c26c9cd0d89d"));
     }
 
     #[test]
@@ -362,6 +402,19 @@ mod tests {
             execution_pass(7),
             execution_pass(8),
         ]
+    }
+
+    fn test_contract() -> Contract {
+        Contract {
+            id: "run-001".to_string(),
+            repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
+            base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: Some("refs/pull/1/head".to_string()),
+            scopes: vec!["core/src".to_string()],
+            requires_human_review: false,
+            admission_policy: AdmissionPolicy::default(),
+        }
     }
 
     fn simple_pass(gate_num: u8) -> GateOutput {

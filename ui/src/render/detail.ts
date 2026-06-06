@@ -32,6 +32,10 @@ function detailMarkup(detail: RunDetail): string {
       <div>
         <p class="eyebrow">Run #${detail.summary.run_id}</p>
         <h2>${escapeHtml(detail.summary.contract_id)}</h2>
+        <p class="candidate-line">
+          ${shortSha(detail.summary.base_sha)}..${shortSha(detail.summary.candidate_sha)}
+          ${candidateRef(detail.summary.candidate_ref)}
+        </p>
       </div>
       <span class="status-pill ${statusClass(detail.summary.status)}">
         ${escapeHtml(detail.summary.status.replaceAll("_", " "))}
@@ -44,6 +48,17 @@ function detailMarkup(detail: RunDetail): string {
     </div>
     ${gateDetails(detail.gates)}
   `;
+}
+
+function shortSha(value: string): string {
+  return escapeHtml(value.slice(0, 12));
+}
+
+function candidateRef(value: string | null): string {
+  if (!value) {
+    return "";
+  }
+  return ` · ${escapeHtml(value)}`;
 }
 
 function gateRail(detail: RunDetail): string {

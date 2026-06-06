@@ -58,7 +58,8 @@ pub async fn execute_existing_run(
             return Err(error.into());
         }
     };
-    let policy_evaluation = evaluate_policy(&gate_outputs, &admission_policy);
+    let policy_evaluation =
+        evaluate_policy(&gate_outputs, &admission_policy, &run_context.contract);
     let final_decision = decide_from_policy(&policy_evaluation, requires_human_review);
 
     finalize_run_record(
@@ -269,6 +270,8 @@ mod tests {
             id: "run-001".to_string(),
             repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["core/src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),

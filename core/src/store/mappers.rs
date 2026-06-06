@@ -11,8 +11,11 @@ pub(super) fn run_summary_from_row(row: &Row<'_>) -> Result<RunStatusSummary, St
     Ok(RunStatusSummary {
         run_id: read_run_id(row, 0)?,
         contract_id: read_column(row, 1)?,
-        status: read_column(row, 2)?,
-        created_at: read_column(row, 3)?,
+        base_sha: read_column(row, 2)?,
+        candidate_sha: read_column(row, 3)?,
+        candidate_ref: read_column(row, 4)?,
+        status: read_column(row, 5)?,
+        created_at: read_column(row, 6)?,
         gates: Vec::new(),
     })
 }
@@ -32,8 +35,11 @@ pub(super) fn run_list_item_from_row(row: &Row<'_>) -> Result<RunListItem, Store
     Ok(RunListItem {
         run_id: read_run_id(row, 0)?,
         contract_id: read_column(row, 1)?,
-        status: read_column(row, 2)?,
-        created_at: read_column(row, 3)?,
+        base_sha: read_column(row, 2)?,
+        candidate_sha: read_column(row, 3)?,
+        candidate_ref: read_column(row, 4)?,
+        status: read_column(row, 5)?,
+        created_at: read_column(row, 6)?,
     })
 }
 

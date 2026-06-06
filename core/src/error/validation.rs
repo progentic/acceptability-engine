@@ -16,6 +16,14 @@ pub enum ValidationError {
     InvalidBaseShaLength { len: usize, value: String },
     #[error("base_sha contains non-hex characters: '{0}'")]
     InvalidBaseShaChars(String),
+    #[error("candidate_sha is required but was empty")]
+    MissingCandidateSha,
+    #[error("candidate_sha must be 40 hex chars, got {len} chars: '{value}'")]
+    InvalidCandidateShaLength { len: usize, value: String },
+    #[error("candidate_sha contains non-hex characters: '{0}'")]
+    InvalidCandidateShaChars(String),
+    #[error("candidate_ref must be non-empty metadata without whitespace: '{0}'")]
+    InvalidCandidateRef(String),
     #[error("scopes cannot be empty")]
     EmptyScopes,
     #[error("scope at index {index} is empty")]

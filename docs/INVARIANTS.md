@@ -59,7 +59,7 @@ Unset or empty `AH_WORKSPACE_MODE` means local mode.
 workspace_root / contract.id
 ```
 
-Git materialization must validate the contract before clone, reject unsafe roots and symlink workspace targets, clean only the selected per-run workspace path, clone without recursive submodules, disable Git credential prompts, detach `HEAD` at the requested `base_sha`, and verify the configured `origin` URL.
+Git materialization must validate the contract before clone, reject unsafe roots and symlink workspace targets, clean only the selected per-run workspace path, clone without recursive submodules, disable Git credential prompts, verify the configured `origin` URL, verify `base_sha`, verify `candidate_sha`, check out `candidate_sha`, and verify workspace `HEAD == candidate_sha`.
 
 Unknown modes must fail at startup.
 
@@ -259,24 +259,21 @@ The `kubernetes-restricted` profile requires deployment-enforced namespace, file
 
 Unknown sandbox profiles must fail at startup.
 
-## 24. The change boundary is scope-based
+## 24. The change boundary is candidate-based and scope-limited
 
-Gate 3 must compare changed files from `base_sha` to `HEAD`.
+The admitted object is `candidate_sha`.
+
+New contracts must include a 40-character hexadecimal `candidate_sha`.
+
+`candidate_ref` is optional provenance metadata only. Mutable provenance such as `candidate_ref`, branch names, pull request refs, or tags must not become admission authority.
+
+Git materialization must verify `base_sha` and `candidate_sha` resolve inside the requested repository, verify `base_sha` is an ancestor of `candidate_sha`, check out `candidate_sha`, and verify workspace `HEAD` equals `candidate_sha`.
+
+Gate 3 must compare changed files from `base_sha` to `candidate_sha`.
 
 Every changed file must fall under one of the contract scopes.
 
 A path such as `src/api_backup/file.rs` must not match scope `src/api`.
-
-Git-mode remote proposed-change admission is not complete until the contract
-has a first-class `candidate_sha`.
-
-When candidate acquisition is implemented, `candidate_sha` is the admitted
-object. Mutable provenance such as `candidate_ref`, branch names, pull request
-refs, or tags must not become admission authority.
-
-When candidate acquisition is implemented, Gate 3 must compare
-`base_sha..candidate_sha` and the workspace `HEAD` must equal `candidate_sha`
-during gate execution.
 
 ## 25. Supply-chain checks are part of admission
 

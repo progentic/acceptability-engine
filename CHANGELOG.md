@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.39] - 2026-06-05 - Candidate SHA Admission Boundary
+
+### Added
+- **Candidate Authority Field** - Added required `candidate_sha` and optional `candidate_ref` to contract, API, replay, policy trace, and browser UI models
+- **Candidate Identity Migration** - Added SQLite migration and schema normalization for `contracts.candidate_sha`, `contracts.candidate_ref`, and `contracts.scopes_json`, with legacy rows backfilled to preserve historical evidence shape
+- **D25-001 Closure Evidence** - Updated the candidate acquisition review and phase map with commit-SHA admission closure evidence
+
+### Changed
+- **Git Materialization** - Git mode now validates `base_sha`, validates `candidate_sha`, checks out `candidate_sha`, verifies `HEAD == candidate_sha`, and treats `candidate_ref` only as a fetch hint
+- **Gate 3 Boundary** - Change-boundary evaluation now compares `base_sha..candidate_sha` instead of using workspace `HEAD` as implicit authority
+- **Contract Persistence** - Reusing a contract id with different authority data, including scopes, is now rejected instead of silently reusing the stored contract row
+- **Governance Docs** - Updated architecture, invariants, API, Phase 35/36 review notes, and the phase map to record `candidate_sha` as the admitted object
+
 ## [0.0.38] - 2026-06-05 - Performance Validation
 
 ### Added

@@ -104,6 +104,9 @@ impl From<ReviewDecisionId> for i64 {
 pub struct RunStatusSummary {
     pub run_id: RunId,
     pub contract_id: String,
+    pub base_sha: String,
+    pub candidate_sha: String,
+    pub candidate_ref: Option<String>,
     pub status: String,
     pub created_at: i64,
     pub gates: Vec<GateRunSummary>,
@@ -122,6 +125,9 @@ pub struct GateRunSummary {
 pub struct RunListItem {
     pub run_id: RunId,
     pub contract_id: String,
+    pub base_sha: String,
+    pub candidate_sha: String,
+    pub candidate_ref: Option<String>,
     pub status: String,
     pub created_at: i64,
 }

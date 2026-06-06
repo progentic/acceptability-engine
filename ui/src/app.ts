@@ -191,6 +191,8 @@ function readContractForm(): ContractSubmission {
     id: inputValue("contract-id"),
     repo_url: inputValue("repo-url"),
     base_sha: inputValue("base-sha"),
+    candidate_sha: inputValue("candidate-sha"),
+    candidate_ref: optionalInputValue("candidate-ref"),
     scopes: scopeValues(),
     requires_human_review: byId<HTMLInputElement>("human-review").checked,
   };
@@ -198,6 +200,10 @@ function readContractForm(): ContractSubmission {
 
 function inputValue(id: string): string {
   return byId<HTMLInputElement>(id).value.trim();
+}
+
+function optionalInputValue(id: string): string | undefined {
+  return inputValue(id) || undefined;
 }
 
 function scopeValues(): string[] {

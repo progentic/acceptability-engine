@@ -77,6 +77,8 @@ mod tests {
             id: "test-1".to_string(),
             repo_url: "x".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -101,6 +103,8 @@ mod tests {
             id: "test-queued".to_string(),
             repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -124,12 +128,53 @@ mod tests {
     }
 
     #[test]
+    fn migration_backfills_legacy_candidate_identity() {
+        let conn = Connection::open_in_memory().unwrap();
+        create_legacy_schema(&conn);
+
+        schema::init_schema(&conn).unwrap();
+
+        assert_eq!(
+            legacy_contract_candidate_sha(&conn),
+            "a9993e364706816aba3e25717850c26c9cd0d89d"
+        );
+    }
+
+    #[test]
+    fn duplicate_contract_id_with_different_candidate_is_rejected() {
+        let conn = open(":memory:").unwrap();
+        let contract = test_contract("test-contract-authority");
+        let mut conflicting_contract = contract.clone();
+        conflicting_contract.candidate_sha = "c9993e364706816aba3e25717850c26c9cd0d89d".to_string();
+
+        create_run(&conn, &contract).unwrap();
+        let result = create_run(&conn, &conflicting_contract);
+
+        assert!(matches!(result, Err(StoreError::InvalidParameter(_))));
+    }
+
+    #[test]
+    fn duplicate_contract_id_with_different_scopes_is_rejected() {
+        let conn = open(":memory:").unwrap();
+        let contract = test_contract("test-scope-authority");
+        let mut conflicting_contract = contract.clone();
+        conflicting_contract.scopes = vec!["docs".to_string()];
+
+        create_run(&conn, &contract).unwrap();
+        let result = create_run(&conn, &conflicting_contract);
+
+        assert!(matches!(result, Err(StoreError::InvalidParameter(_))));
+    }
+
+    #[test]
     fn latest_attempt_summary_excludes_older_attempt_gates() {
         let conn = open(":memory:").unwrap();
         let contract = Contract {
             id: "test-latest-attempt".to_string(),
             repo_url: "x".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -460,6 +505,8 @@ mod tests {
             id: "test-final-unique".to_string(),
             repo_url: "x".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -542,6 +589,8 @@ mod tests {
             id: id.to_string(),
             repo_url: "x".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -637,6 +686,15 @@ mod tests {
              FROM gate_runs
              JOIN attempts ON attempts.id = gate_runs.attempt_id
              WHERE gate_runs.message = 'legacy gate'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap()
+    }
+
+    fn legacy_contract_candidate_sha(conn: &Connection) -> String {
+        conn.query_row(
+            "SELECT candidate_sha FROM contracts WHERE id = 'legacy-1'",
             [],
             |row| row.get(0),
         )

@@ -134,5 +134,7 @@ Phase 36 establishes baseline local performance evidence for read availability,
 queue behavior, request limiting, pooled SQLite access, and indexed storage
 queries.
 
-The project remains blocked from production release by D25-001 candidate
-acquisition, not by a newly discovered Phase 36 performance defect.
+At the time of Phase 36, the project remained blocked from production release
+by D25-001 candidate acquisition, not by a newly discovered Phase 36 performance
+defect. The subsequent candidate acquisition implementation track closes
+D25-001 for commit-SHA admission.

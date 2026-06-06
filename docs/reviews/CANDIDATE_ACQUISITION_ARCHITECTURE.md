@@ -2,10 +2,10 @@
 
 ## Scope
 
-This review defines the admitted change object for future Git-mode admission.
+This review defines the admitted change object for Git-mode admission.
 
-It does not implement contract fields, migrations, API changes, workspace
-changes, replay changes, policy changes, or gate changes.
+Implementation is now complete for commit-SHA candidate admission. Patch,
+archive, and pull-request-number admission remain out of scope.
 
 ## Decision
 
@@ -23,8 +23,8 @@ The change being admitted is the Git diff:
 base_sha..candidate_sha
 ```
 
-`candidate_ref` may exist later as provenance metadata to help explain or fetch
-the candidate. It is not authority.
+`candidate_ref` may exist as provenance metadata to help explain or fetch the
+candidate. It is not authority.
 
 ## Rejected Alternatives
 
@@ -39,7 +39,7 @@ the candidate. It is not authority.
 
 ## Contract Model
 
-Future contracts should carry:
+Contracts carry:
 
 ```text
 repo_url
@@ -58,14 +58,14 @@ provenance metadata only.
 
 ## Materialization Flow
 
-Future Git materialization should:
+Git materialization:
 
 1. validate the contract shape
 2. clone `repo_url` into the per-run workspace
 3. verify `origin` matches `repo_url`
 4. verify `base_sha` resolves inside `repo_url`
 5. verify `candidate_sha` resolves inside `repo_url`
-6. verify `base_sha` is an ancestor or explicit comparison base for `candidate_sha`
+6. verify `base_sha` is an ancestor of `candidate_sha`
 7. detach `HEAD` at `candidate_sha`
 8. verify workspace `HEAD` equals `candidate_sha`
 9. run gates against that workspace
@@ -84,11 +84,12 @@ workspace HEAD == candidate_sha
 
 ## Evidence Chain
 
-The durable evidence chain should become:
+The durable evidence chain is:
 
 ```text
 contract
   -> candidate identity
+  -> scopes and admission policy
   -> materialized workspace at candidate_sha
   -> gate evidence
   -> policy trace
@@ -96,16 +97,16 @@ contract
   -> final decision
 ```
 
-The contract record must preserve `repo_url`, `base_sha`, `candidate_sha`, and
-optional `candidate_ref`.
+The contract record must preserve `repo_url`, `base_sha`, `candidate_sha`,
+optional `candidate_ref`, scopes, and admission policy.
 
 Gate evidence must be attributable to the exact `candidate_sha` that was
 executed.
 
 ## Replay Impact
 
-Replay should include `candidate_sha` and optional `candidate_ref` in the
-contract section.
+Replay includes `candidate_sha` and optional `candidate_ref` in the contract
+section.
 
 Replay must not resolve mutable refs. It should reconstruct the historical
 admission record from persisted evidence.
@@ -128,16 +129,15 @@ admitted change must use `candidate_sha`.
 
 Repository policy remains enforced before submission.
 
-Future implementation must ensure both `base_sha` and `candidate_sha` resolve
-inside the authorized `repo_url`. A SHA that resolves only in another repository
-must fail.
+Implementation ensures both `base_sha` and `candidate_sha` resolve inside the
+authorized `repo_url`. A SHA that resolves only in another repository must fail.
 
 Network access for fetching candidates remains controlled by workspace mode,
 sandbox profile, and deployment egress policy.
 
 ## Migration Impact
 
-Adding `candidate_sha` will require:
+Adding `candidate_sha` required:
 
 - contract schema migration
 - API model update
@@ -148,24 +148,25 @@ Adding `candidate_sha` will require:
 - Gate 3 comparison update
 - legacy contract handling decision
 
-Legacy contracts without `candidate_sha` must not be silently treated as
-production Git-mode admission of a remote proposed change.
+Legacy contracts without `candidate_sha` are migrated by backfilling
+`candidate_sha = base_sha`. That preserves historical evidence shape without
+claiming that legacy rows represented production Git-mode admission of a remote
+proposed change.
+
+Legacy contracts without persisted scopes are migrated with `scopes_json = []`
+for preservation only. New contracts persist the validated scope list.
 
 ## Open Questions
 
 | Question | Current Position |
 | :--- | :--- |
-| Should `base_sha` have to be an ancestor? | Prefer ancestor verification, with explicit comparison-base exception only if documented. |
+| Should `base_sha` have to be an ancestor? | Yes. The implemented model requires ancestor verification. |
 | Should `candidate_ref` be persisted? | Yes, as optional provenance metadata only. |
 | Should patch/archive candidates be supported? | Not before commit-SHA admission is implemented and reviewed. |
 | Should Git egress be allowed under `kubernetes-restricted`? | Requires a controlled egress design; denied egress remains the default. |
 
 ## Conclusion
 
-D25-001 should close only when `candidate_sha` is implemented as the admitted
-object and Gate 3 compares `base_sha..candidate_sha` while the workspace is
-detached at `candidate_sha`.
-
-Until then, Git mode remains useful for controlled local validation and
-development scenarios, but it is not a complete remote proposed-change
-admission model.
+D25-001 is closed for commit-SHA candidate admission. `candidate_sha` is
+implemented as the admitted object, Gate 3 compares `base_sha..candidate_sha`,
+and the workspace is detached at `candidate_sha`.

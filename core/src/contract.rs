@@ -13,6 +13,9 @@ pub struct Contract {
     pub id: String,
     pub repo_url: String,
     pub base_sha: String,
+    pub candidate_sha: String,
+    #[serde(default)]
+    pub candidate_ref: Option<String>,
     pub scopes: Vec<String>,
     pub requires_human_review: bool,
     #[serde(default)]
@@ -23,7 +26,9 @@ impl Contract {
     pub fn validate(&self) -> Result<(), ValidationError> {
         validate_contract_id(&self.id)?;
         validate_repo_url(&self.repo_url)?;
-        validate_base_sha(&self.base_sha)?;
+        validate_sha("base_sha", &self.base_sha)?;
+        validate_sha("candidate_sha", &self.candidate_sha)?;
+        validate_candidate_ref(self.candidate_ref.as_deref())?;
         validate_scopes(&self.scopes)?;
         self.admission_policy.validate()?;
         Ok(())
@@ -50,18 +55,54 @@ fn validate_repo_url(repo_url: &str) -> Result<(), ValidationError> {
     Ok(())
 }
 
-fn validate_base_sha(base_sha: &str) -> Result<(), ValidationError> {
-    if base_sha.is_empty() {
-        return Err(ValidationError::MissingBaseSha);
+fn validate_sha(field: &str, sha: &str) -> Result<(), ValidationError> {
+    if sha.is_empty() {
+        return missing_sha_error(field);
     }
-    if base_sha.len() != 40 {
-        return Err(ValidationError::InvalidBaseShaLength {
-            len: base_sha.len(),
-            value: base_sha.to_string(),
-        });
+    if sha.len() != 40 {
+        return invalid_sha_length_error(field, sha);
     }
-    if !base_sha.chars().all(|c| c.is_ascii_hexdigit()) {
-        return Err(ValidationError::InvalidBaseShaChars(base_sha.to_string()));
+    if !sha.chars().all(|c| c.is_ascii_hexdigit()) {
+        return invalid_sha_chars_error(field, sha);
+    }
+    Ok(())
+}
+
+fn missing_sha_error(field: &str) -> Result<(), ValidationError> {
+    match field {
+        "candidate_sha" => Err(ValidationError::MissingCandidateSha),
+        _ => Err(ValidationError::MissingBaseSha),
+    }
+}
+
+fn invalid_sha_length_error(field: &str, sha: &str) -> Result<(), ValidationError> {
+    match field {
+        "candidate_sha" => Err(ValidationError::InvalidCandidateShaLength {
+            len: sha.len(),
+            value: sha.to_string(),
+        }),
+        _ => Err(ValidationError::InvalidBaseShaLength {
+            len: sha.len(),
+            value: sha.to_string(),
+        }),
+    }
+}
+
+fn invalid_sha_chars_error(field: &str, sha: &str) -> Result<(), ValidationError> {
+    match field {
+        "candidate_sha" => Err(ValidationError::InvalidCandidateShaChars(sha.to_string())),
+        _ => Err(ValidationError::InvalidBaseShaChars(sha.to_string())),
+    }
+}
+
+fn validate_candidate_ref(candidate_ref: Option<&str>) -> Result<(), ValidationError> {
+    let Some(candidate_ref) = candidate_ref else {
+        return Ok(());
+    };
+    if candidate_ref.trim().is_empty() || candidate_ref.chars().any(char::is_whitespace) {
+        return Err(ValidationError::InvalidCandidateRef(
+            candidate_ref.to_string(),
+        ));
     }
     Ok(())
 }
@@ -165,6 +206,8 @@ mod tests {
             id: "run-001".to_string(),
             repo_url: "https://github.com/progentic/acceptability-engine.git".to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: Some("refs/pull/1/head".to_string()),
             scopes: vec!["core/src".to_string()],
             requires_human_review: false,
             admission_policy: AdmissionPolicy::default(),
@@ -245,5 +288,27 @@ mod tests {
         contract.scopes = vec!["core/src/".to_string()];
 
         assert!(contract.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_missing_candidate_sha() {
+        let mut contract = valid_contract();
+        contract.candidate_sha.clear();
+
+        assert!(matches!(
+            contract.validate(),
+            Err(ValidationError::MissingCandidateSha)
+        ));
+    }
+
+    #[test]
+    fn rejects_candidate_ref_with_whitespace() {
+        let mut contract = valid_contract();
+        contract.candidate_ref = Some("refs/heads/main candidate".to_string());
+
+        assert!(matches!(
+            contract.validate(),
+            Err(ValidationError::InvalidCandidateRef(_))
+        ));
     }
 }

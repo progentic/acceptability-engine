@@ -88,9 +88,17 @@ fn materialize_git_workspace(
     clean_existing_workspace(&workspace_path)?;
     clone_repository(&request.contract.repo_url, &workspace_path)?;
     verify_origin(&workspace_path, &request.contract.repo_url)?;
-    detach_head(&workspace_path, &request.contract.base_sha)?;
+    fetch_candidate_ref(&workspace_path, request.contract.candidate_ref.as_deref())?;
+    verify_commit(&workspace_path, &request.contract.base_sha)?;
+    verify_commit(&workspace_path, &request.contract.candidate_sha)?;
+    verify_base_ancestor(
+        &workspace_path,
+        &request.contract.base_sha,
+        &request.contract.candidate_sha,
+    )?;
+    detach_head(&workspace_path, &request.contract.candidate_sha)?;
     verify_detached_head(&workspace_path)?;
-    verify_head_commit(&workspace_path, &request.contract.base_sha)?;
+    verify_head_commit(&workspace_path, &request.contract.candidate_sha)?;
     Ok(workspace_path)
 }
 
@@ -142,8 +150,49 @@ fn verify_origin(workspace_path: &Path, expected_repo_url: &str) -> Result<(), G
     ensure_success_with_stdout(output, &normalize_repo_url(expected_repo_url))
 }
 
-fn detach_head(workspace_path: &Path, base_sha: &str) -> Result<(), GitError> {
-    let output = git_in_workspace(workspace_path, ["checkout", "--detach", base_sha])?;
+fn fetch_candidate_ref(workspace_path: &Path, candidate_ref: Option<&str>) -> Result<(), GitError> {
+    let Some(candidate_ref) = candidate_ref else {
+        return Ok(());
+    };
+    let output = git_in_workspace(
+        workspace_path,
+        ["fetch", "--no-tags", "origin", candidate_ref],
+    )?;
+    ensure_success(output)
+}
+
+fn verify_commit(workspace_path: &Path, sha: &str) -> Result<(), GitError> {
+    let commit_ref = format!("{sha}^{{commit}}");
+    let output = git_in_workspace(workspace_path, ["cat-file", "-e", commit_ref.as_str()])?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(GitError::CommitNotFound {
+        path: display_path(workspace_path),
+        sha: sha.to_string(),
+    })
+}
+
+fn verify_base_ancestor(
+    workspace_path: &Path,
+    base_sha: &str,
+    candidate_sha: &str,
+) -> Result<(), GitError> {
+    let output = git_in_workspace(
+        workspace_path,
+        ["merge-base", "--is-ancestor", base_sha, candidate_sha],
+    )?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(GitError::BaseNotAncestor {
+        base_sha: base_sha.to_string(),
+        candidate_sha: candidate_sha.to_string(),
+    })
+}
+
+fn detach_head(workspace_path: &Path, candidate_sha: &str) -> Result<(), GitError> {
+    let output = git_in_workspace(workspace_path, ["checkout", "--detach", candidate_sha])?;
     ensure_success(output)
 }
 
@@ -152,9 +201,16 @@ fn verify_detached_head(workspace_path: &Path) -> Result<(), GitError> {
     ensure_success_with_stdout(output, "HEAD")
 }
 
-fn verify_head_commit(workspace_path: &Path, base_sha: &str) -> Result<(), GitError> {
+fn verify_head_commit(workspace_path: &Path, candidate_sha: &str) -> Result<(), GitError> {
     let output = git_in_workspace(workspace_path, ["rev-parse", "HEAD"])?;
-    ensure_success_with_stdout(output, &base_sha.to_ascii_lowercase())
+    let head = normalize_repo_url(&output_stdout(&output));
+    if output.status.success() && head == candidate_sha.to_ascii_lowercase() {
+        return Ok(());
+    }
+    Err(GitError::HeadMismatch {
+        head,
+        candidate_sha: candidate_sha.to_ascii_lowercase(),
+    })
 }
 
 fn validate_workspace_root(workspace_root: &Path) -> Result<(), WorkspaceMaterializationError> {
@@ -354,6 +410,7 @@ mod tests {
             workspace_mode: WorkspaceMode::Git,
             contract: Contract {
                 base_sha: base_sha.clone(),
+                candidate_sha: base_sha.clone(),
                 ..contract
             },
         })
@@ -375,6 +432,32 @@ mod tests {
     }
 
     #[test]
+    fn git_materialization_checks_out_candidate_sha() {
+        let source = create_source_repo("candidate-source");
+        let base_sha = git_current_head(&source);
+        commit_source_change(&source, "pub fn candidate() {}\n", "candidate");
+        let candidate_sha = git_current_head(&source);
+        let root = temp_path("candidate-root");
+        let contract = contract_for_repo(&display_path(&source));
+
+        let workspace = materialize_git_workspace(&WorkspaceRequest {
+            workspace_root: root.clone(),
+            workspace_mode: WorkspaceMode::Git,
+            contract: Contract {
+                base_sha,
+                candidate_sha: candidate_sha.clone(),
+                ..contract
+            },
+        })
+        .unwrap();
+
+        assert_eq!(git_stdout(&workspace, ["rev-parse", "HEAD"]), candidate_sha);
+
+        let _ = fs::remove_dir_all(root);
+        let _ = fs::remove_dir_all(source);
+    }
+
+    #[test]
     fn cleans_existing_workspace_before_clone() {
         let source = create_source_repo("cleanup-source");
         let base_sha = git_current_head(&source);
@@ -387,7 +470,8 @@ mod tests {
             workspace_root: root.clone(),
             workspace_mode: WorkspaceMode::Git,
             contract: Contract {
-                base_sha,
+                base_sha: base_sha.clone(),
+                candidate_sha: base_sha,
                 ..contract_for_repo(&display_path(&source))
             },
         })
@@ -478,6 +562,8 @@ mod tests {
             id: "run-001".to_string(),
             repo_url: repo_url.to_string(),
             base_sha: "a9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_sha: "b9993e364706816aba3e25717850c26c9cd0d89d".to_string(),
+            candidate_ref: None,
             scopes: vec!["src".to_string()],
             requires_human_review: false,
             admission_policy: crate::policy::AdmissionPolicy::default(),
@@ -503,6 +589,23 @@ mod tests {
             ],
         );
         path
+    }
+
+    fn commit_source_change(path: &Path, contents: &str, message: &str) {
+        fs::write(path.join("src").join("candidate.rs"), contents).unwrap();
+        git(path, ["add", "."]);
+        git(
+            path,
+            [
+                "-c",
+                "user.name=test",
+                "-c",
+                "user.email=test@example.com",
+                "commit",
+                "-m",
+                message,
+            ],
+        );
     }
 
     fn git_current_head(path: &Path) -> String {

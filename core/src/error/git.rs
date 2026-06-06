@@ -12,6 +12,13 @@ pub enum GitError {
     RepoNotFound { path: String },
     #[error("commit '{sha}' not found in repository at '{path}'")]
     CommitNotFound { path: String, sha: String },
+    #[error("workspace HEAD '{head}' does not match candidate_sha '{candidate_sha}'")]
+    HeadMismatch { head: String, candidate_sha: String },
+    #[error("base_sha '{base_sha}' is not an ancestor of candidate_sha '{candidate_sha}'")]
+    BaseNotAncestor {
+        base_sha: String,
+        candidate_sha: String,
+    },
     #[error("failed to execute git process: {source}")]
     ProcessExecutionFailed {
         #[source]

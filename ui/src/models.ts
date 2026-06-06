@@ -10,6 +10,8 @@ export interface ContractSubmission {
   id: string;
   repo_url: string;
   base_sha: string;
+  candidate_sha: string;
+  candidate_ref?: string;
   scopes: string[];
   requires_human_review: boolean;
   admission_policy?: AdmissionPolicy;
@@ -36,6 +38,9 @@ export interface SubmitResponse {
 export interface RunListItem {
   run_id: number;
   contract_id: string;
+  base_sha: string;
+  candidate_sha: string;
+  candidate_ref: string | null;
   status: RunStatus;
   created_at: number;
 }

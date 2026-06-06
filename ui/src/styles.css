@@ -266,6 +266,12 @@ button[type="submit"] {
   text-transform: uppercase;
 }
 
+.candidate-line {
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+
 .status-dot {
   width: 10px;
   height: 10px;

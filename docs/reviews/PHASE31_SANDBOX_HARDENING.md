@@ -108,7 +108,7 @@ implementation.
 | D25-002 | Narrowed for `kubernetes-restricted` profile | Production containment is now defined as deployment-enforced Kubernetes restricted controls plus Rust runner hardening. Full closure requires validation on a Kubernetes runtime enforcing the manifest. |
 | D31-001 | Accepted limitation | The `development` profile is not production containment. |
 | D31-002 | Accepted limitation | Non-Kubernetes production deployments must provide equivalent namespace, filesystem, network, syscall, and resource controls outside this repository. |
-| D31-003 | Accepted limitation | Git materialization with denied egress requires future controlled egress design and remains constrained by D25-001. |
+| D31-003 | Accepted limitation | Git materialization with denied egress requires controlled egress design. |
 
 ## Validation Evidence
 

@@ -122,8 +122,7 @@ manifest enforces:
 
 The restricted Kubernetes profile is compatible with local workspace mode.
 Git materialization that requires outbound clone access needs a deliberate
-future egress policy and is still constrained by the release-critical
-candidate-change acquisition gap.
+egress policy.
 
 ## Metrics
 

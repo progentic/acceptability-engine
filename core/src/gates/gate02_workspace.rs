@@ -8,12 +8,17 @@ use std::process::{Command, Output};
 pub async fn run(run: &Run) -> Result<GateResult, GateError> {
     let workspace_path = run.workspace.clone();
     let base_sha = run.contract.base_sha.clone();
+    let candidate_sha = run.contract.candidate_sha.clone();
 
     tokio::task::spawn_blocking(move || {
         validate_local_workspace(&workspace_path)?;
-        validate_base_sha(&base_sha)?;
+        validate_sha("base_sha", &base_sha)?;
+        validate_sha("candidate_sha", &candidate_sha)?;
         validate_git_repository(&workspace_path)?;
-        validate_base_commit(&workspace_path, &base_sha)?;
+        validate_commit(&workspace_path, &base_sha)?;
+        validate_commit(&workspace_path, &candidate_sha)?;
+        validate_base_ancestor(&workspace_path, &base_sha, &candidate_sha)?;
+        validate_head_commit(&workspace_path, &candidate_sha)?;
         Ok::<(), GitError>(())
     })
     .await
@@ -39,7 +44,7 @@ fn validate_local_workspace(path: &Path) -> Result<(), GitError> {
     Ok(())
 }
 
-fn validate_base_sha(sha: &str) -> Result<(), GitError> {
+fn validate_sha(_field: &str, sha: &str) -> Result<(), GitError> {
     if sha.trim().is_empty() {
         return Err(GitError::EmptyBaseSha);
     }
@@ -56,7 +61,7 @@ fn validate_git_repository(path: &Path) -> Result<(), GitError> {
     })
 }
 
-fn validate_base_commit(path: &Path, sha: &str) -> Result<(), GitError> {
+fn validate_commit(path: &Path, sha: &str) -> Result<(), GitError> {
     let commit_ref = format!("{sha}^{{commit}}");
     let output = run_git_command(path, ["cat-file", "-e", commit_ref.as_str()])?;
     if output.status.success() {
@@ -65,6 +70,36 @@ fn validate_base_commit(path: &Path, sha: &str) -> Result<(), GitError> {
     Err(GitError::CommitNotFound {
         path: display_path(path),
         sha: sha.to_string(),
+    })
+}
+
+fn validate_base_ancestor(
+    path: &Path,
+    base_sha: &str,
+    candidate_sha: &str,
+) -> Result<(), GitError> {
+    let output = run_git_command(
+        path,
+        ["merge-base", "--is-ancestor", base_sha, candidate_sha],
+    )?;
+    if output.status.success() {
+        return Ok(());
+    }
+    Err(GitError::BaseNotAncestor {
+        base_sha: base_sha.to_string(),
+        candidate_sha: candidate_sha.to_string(),
+    })
+}
+
+fn validate_head_commit(path: &Path, candidate_sha: &str) -> Result<(), GitError> {
+    let output = run_git_command(path, ["rev-parse", "HEAD"])?;
+    let head = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if output.status.success() && head == candidate_sha.to_ascii_lowercase() {
+        return Ok(());
+    }
+    Err(GitError::HeadMismatch {
+        head,
+        candidate_sha: candidate_sha.to_ascii_lowercase(),
     })
 }
 
