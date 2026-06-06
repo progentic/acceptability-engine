@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.42] - 2026-06-06 - License Governance
+
+### Added
+- **Cargo Deny Policy** - Added `core/deny.toml` to validate advisories, bans, sources, and dependency licenses for Gate 8 supply-chain governance
+- **License Governance Review** - Added `docs/reviews/LICENSE_GOVERNANCE.md` with the approved license list, review-required policy, prohibited-license rule, and exception process
+
+### Changed
+- **Local Crate License Metadata** - Declared the Rust authority crate license as MIT to match the repository license
+- **D37-001 Closure** - Updated Phase 37 and PHASEMAP evidence to close the supply-chain license governance finding after `cargo deny check` passed
+
 ## [0.0.41] - 2026-06-06 - Placeholder Credential Rejection
 
 ### Added

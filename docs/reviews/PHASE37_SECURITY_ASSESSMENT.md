@@ -135,10 +135,10 @@ Results:
 | Tool | Result | Notes |
 | :--- | :--- | :--- |
 | `cargo audit` | Pass | Loaded 1120 RustSec advisories and scanned 123 locked dependencies. |
-| `cargo deny check` | Fail | `advisories ok`, `bans ok`, and `sources ok`; `licenses FAILED` because no deny config/license allowlist exists and the local crate has no license expression. |
+| `cargo deny check` | Pass | `advisories ok`, `bans ok`, `licenses ok`, and `sources ok` after adding the explicit license policy. |
 
-The `cargo deny` result is a supply-chain governance gap, not evidence of a
-known vulnerability in the dependency graph.
+The `cargo deny` result now validates advisories, bans, sources, and licenses
+against the repository policy.
 
 ## Findings
 
@@ -171,11 +171,11 @@ Required closure:
 Validate runtime enforcement on a real Kubernetes target or add a stronger
 isolated runner design.
 
-### D37-001: Supply-Chain License Policy Is Not Configured
+### D37-001: Supply-Chain License Policy
 
 Severity: Medium
 
-Status: Open
+Status: Closed
 
 Release blocker: No
 
@@ -183,20 +183,19 @@ Required before v1.0: Yes
 
 Owner surface: Supply chain
 
-Target phase: Phase 38 Documentation Freeze or Phase 39 Release Candidate
+Target phase: Closed before Phase 38 Documentation Freeze
 
-`cargo deny check` falls back to its default config and fails license checks for
-normal open-source licenses and the local crate's missing license expression.
+`core/deny.toml` defines the current license, advisory, ban, and source policy.
+The local crate declares its MIT license expression.
 
 Impact:
 
-Gate 8 can perform advisory and audit checks, but production supply-chain
-governance cannot yet distinguish approved licenses from unreviewed ones.
+Gate 8 now validates dependency licenses against the approved repository policy.
 
 Required closure:
 
-Add an explicit `deny.toml` license/source policy and a local crate license
-expression, then require `cargo deny check` to pass in validation.
+Closed by `docs/reviews/LICENSE_GOVERNANCE.md`, `core/deny.toml`, local crate
+license metadata, and passing `cargo deny check` validation.
 
 ### D37-002: Placeholder Kubernetes API Key Must Fail Closed
 
@@ -231,7 +230,7 @@ runbook updates.
 | ID | Severity | Release Blocker | Required Before v1.0 | Owner Surface | Target Phase | Required Action |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | D25-002 | High | Governance decision required | Governance decision required | Sandbox/deployment | Phase 40 | Validate `kubernetes-restricted` runtime enforcement or introduce stronger isolated execution. |
-| D37-001 | Medium | No | Yes | Supply chain | Phase 38 or Phase 39 | Add `deny.toml`, approve licenses/sources explicitly, and make `cargo deny check` pass. |
+| D37-001 | Medium | No | Closed | Supply chain | Closed before Phase 38 | License governance is documented, `core/deny.toml` approves current licenses and sources, and `cargo deny check` passes. |
 | D37-002 | High | No | Closed | Deployment/security | Closed before Phase 38 | Startup rejects known placeholder API key tokens and deployment docs/runbooks document the rule. |
 
 ## Validation Evidence
@@ -247,9 +246,9 @@ cargo deny check
 Results:
 
 ```text
-cargo test: 142 passed
+cargo test: 142 passed during assessment; 147 passed during remediation validation
 cargo audit: passed
-cargo deny check: failed license policy; advisories/bans/sources ok
+cargo deny check: passed; advisories/bans/licenses/sources ok
 ```
 
 ## Conclusion
@@ -259,6 +258,6 @@ SHA authority, tenant isolation, review authorization, policy evaluation,
 retention safety, replay integrity, and audit evidence are coherent.
 
 Production release is no longer blocked by D37-002 because placeholder
-credentials now fail closed at startup. D25-002 remains a governance decision
-about residual sandbox risk. D37-001 is not an immediate release blocker, but
-it must be resolved before v1.0 supply-chain governance is complete.
+credentials now fail closed at startup. D37-001 is closed because license
+governance is explicit and validated. D25-002 remains a governance decision
+about residual sandbox risk.

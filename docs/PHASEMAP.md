@@ -999,7 +999,7 @@ Phase 37 validates the core admission security model after D25-001. Candidate SH
 Notes / Deviations
 
 * D25-002 is residual risk: production containment architecture exists, and Phase 40 must decide whether deployment-enforced Kubernetes containment plus Rust runner hardening is sufficient for release.
-* D37-001 is open, medium severity, not a release blocker, and required before v1.0: `cargo deny check` fails license governance because no explicit deny config/license allowlist exists and the local crate lacks a license expression.
+* D37-001 is closed: `core/deny.toml` defines advisory, ban, source, and license policy; the local crate declares its MIT license; `docs/reviews/LICENSE_GOVERNANCE.md` records approved licenses and the exception process; and `cargo deny check` passes.
 * D37-002 is closed: startup rejects known placeholder API key tokens, including the Kubernetes manifest example token, before the server accepts requests.
 * The penetration testing report is source-grounded and local-control based; no third-party dynamic penetration test was executed.
 * `INVARIANTS.md` was inspected; no new invariant was required.
