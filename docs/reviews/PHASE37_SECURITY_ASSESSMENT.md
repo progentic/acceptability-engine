@@ -202,29 +202,29 @@ expression, then require `cargo deny check` to pass in validation.
 
 Severity: High
 
-Status: Open
+Status: Closed
 
-Release blocker: Yes
+Release blocker: No
 
 Required before v1.0: Yes
 
 Owner surface: Deployment/security
 
-Target phase: Phase 38 Documentation Freeze
+Target phase: Closed before Phase 38 Documentation Freeze
 
 The Kubernetes manifest contains `replace-me|admin|default|*` as a placeholder
-secret value. The startup runbook instructs operators to replace it before
-production use, but startup does not reject that exact placeholder in code.
+secret value. Startup now rejects known placeholder API key tokens in
+`api-key` mode, including the exact manifest example token.
 
 Impact:
 
-Applying the manifest unchanged would create a known admin wildcard credential.
+Applying the manifest unchanged fails startup instead of creating a known admin
+wildcard credential.
 
 Required closure:
 
-Add startup rejection for known placeholder API keys and require deployment
-validation or secret-management tooling that prevents the placeholder from
-reaching production.
+Closed by startup rejection tests, deployment documentation, and startup
+runbook updates.
 
 ## Remediation Inventory
 
@@ -232,7 +232,7 @@ reaching production.
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | D25-002 | High | Governance decision required | Governance decision required | Sandbox/deployment | Phase 40 | Validate `kubernetes-restricted` runtime enforcement or introduce stronger isolated execution. |
 | D37-001 | Medium | No | Yes | Supply chain | Phase 38 or Phase 39 | Add `deny.toml`, approve licenses/sources explicitly, and make `cargo deny check` pass. |
-| D37-002 | High | Yes | Yes | Deployment/security | Phase 38 | Prevent placeholder API keys from production startup and enforce replacement through deployment tooling. |
+| D37-002 | High | No | Closed | Deployment/security | Closed before Phase 38 | Startup rejects known placeholder API key tokens and deployment docs/runbooks document the rule. |
 
 ## Validation Evidence
 
@@ -258,8 +258,7 @@ Phase 37 validates the core admission security model after D25-001. Candidate
 SHA authority, tenant isolation, review authorization, policy evaluation,
 retention safety, replay integrity, and audit evidence are coherent.
 
-Production release is blocked by D37-002 until placeholder credentials fail
-closed or are prevented by deployment tooling. D25-002 remains a governance
-decision about residual sandbox risk. D37-001 is not an immediate release
-blocker, but it must be resolved before v1.0 supply-chain governance is
-complete.
+Production release is no longer blocked by D37-002 because placeholder
+credentials now fail closed at startup. D25-002 remains a governance decision
+about residual sandbox risk. D37-001 is not an immediate release blocker, but
+it must be resolved before v1.0 supply-chain governance is complete.

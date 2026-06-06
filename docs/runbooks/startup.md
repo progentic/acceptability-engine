@@ -36,6 +36,20 @@ Start the engine and prove it is ready to accept work.
    replace-me|admin|default|*
    ```
 
+   Startup rejects known placeholder tokens, including:
+
+   ```text
+   changeme
+   change-me
+   placeholder
+   default
+   example
+   replace-me
+   replace_this
+   replace-this
+   your-token-here
+   ```
+
 ## Compose Startup
 
 ```bash
@@ -65,7 +79,7 @@ curl --fail http://127.0.0.1:8080/metrics
 - Liveness returns `ok`.
 - Readiness returns `ready`.
 - Metrics include `acceptability_engine_uptime_seconds`.
-- No startup log reports invalid workspace mode, invalid sandbox profile, or SQLite readiness failure.
+- No startup log reports invalid workspace mode, invalid sandbox profile, placeholder API key, or SQLite readiness failure.
 
 ## Failure Response
 

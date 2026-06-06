@@ -195,13 +195,21 @@ Repository policy must be enforced before creating queued run records.
 
 A denied submission must be auditable.
 
-## 16. Security denials are evidence
+## 16. Production security mode must reject placeholder credentials
+
+`AH_SECURITY_MODE=api-key` must not start with known placeholder API key tokens.
+
+Placeholder values include documented deployment examples and common values such as `changeme`, `placeholder`, `default`, `example`, and `replace-me`.
+
+Production deployments must supply non-placeholder API key tokens before the server accepts requests.
+
+## 17. Security denials are evidence
 
 Authentication failures, authorization failures, rate limit failures, quota failures, and repository policy failures must be recorded as audit events when the server has enough context to write an event.
 
 Audit events must include outcome and reason.
 
-## 17. Progress streams are observational
+## 18. Progress streams are observational
 
 WebSocket progress events may report current run execution state.
 
@@ -209,7 +217,7 @@ Progress events must not create, approve, reject, retry, cancel, or otherwise mu
 
 Reconnect replay is an operator visibility aid. Durable evidence remains in SQLite and the artifact store.
 
-## 18. Queues are bounded
+## 19. Queues are bounded
 
 The run queue must remain bounded.
 
@@ -217,13 +225,13 @@ If work cannot be queued, the run must not silently disappear.
 
 A run that was created but cannot be queued must be marked as failed internal or returned as unavailable through a clear error path.
 
-## 19. Blocking work must not block async executor threads
+## 20. Blocking work must not block async executor threads
 
 SQLite access, Git commands, Cargo commands, filesystem-heavy work, and other blocking operations must run through blocking boundaries.
 
 Async request handlers and worker futures must not hold synchronous locks or perform blocking process execution directly.
 
-## 20. Process output is bounded
+## 21. Process output is bounded
 
 Gate stdout and stderr capture must have a hard size limit.
 
@@ -231,7 +239,7 @@ Oversized output is an engine-visible failure condition.
 
 Read APIs may return previews, but they must expose truncation flags when previews are shortened.
 
-## 21. Gate command environment is controlled
+## 22. Gate command environment is controlled
 
 Gate commands must not inherit the caller environment by default.
 
@@ -239,7 +247,7 @@ The gate process environment must clear inherited variables and set only the req
 
 Network-dependent Cargo and Git behavior must be disabled unless a later design explicitly adds controlled network access.
 
-## 22. Timeouts are mandatory for external commands
+## 23. Timeouts are mandatory for external commands
 
 Every external gate command must have a timeout.
 
@@ -247,7 +255,7 @@ Timeout cleanup must terminate the process and descendants where the platform su
 
 A timeout must not be interpreted as a passing gate.
 
-## 23. Production sandbox profile must fail closed
+## 24. Production sandbox profile must fail closed
 
 `development` and `kubernetes-restricted` are the implemented sandbox profiles.
 
@@ -259,7 +267,7 @@ The `kubernetes-restricted` profile requires deployment-enforced namespace, file
 
 Unknown sandbox profiles must fail at startup.
 
-## 24. The change boundary is candidate-based and scope-limited
+## 25. The change boundary is candidate-based and scope-limited
 
 The admitted object is `candidate_sha`.
 
@@ -275,7 +283,7 @@ Every changed file must fall under one of the contract scopes.
 
 A path such as `src/api_backup/file.rs` must not match scope `src/api`.
 
-## 25. Supply-chain checks are part of admission
+## 26. Supply-chain checks are part of admission
 
 The supply-chain gate is part of the admission sequence.
 
@@ -283,7 +291,7 @@ The supply-chain gate is part of the admission sequence.
 
 A failed supply-chain command rejects the run.
 
-## 26. Metrics are operational signals, not authority
+## 27. Metrics are operational signals, not authority
 
 Prometheus metrics and logs may help operators understand the system.
 
@@ -291,7 +299,7 @@ They do not determine run status.
 
 Durable store state and evidence records are the authoritative record.
 
-## 27. The UI is non-authoritative
+## 28. The UI is non-authoritative
 
 The browser UI may call API endpoints and render their responses.
 
@@ -299,7 +307,7 @@ The UI must not synthesize gate results, rewrite statuses, suppress failures, or
 
 Polling is an observation mechanism. It is not a state transition mechanism.
 
-## 28. API response models must remain explicit
+## 29. API response models must remain explicit
 
 Public API models must use explicit fields.
 
@@ -307,13 +315,13 @@ Do not return unstructured blobs when the domain has known fields.
 
 Typed identifiers should not be interchangeable inside Rust code.
 
-## 29. Migrations must preserve existing evidence
+## 30. Migrations must preserve existing evidence
 
 Schema changes must preserve existing contracts, runs, attempts, gate records, evidence bundles, final decisions, and audit events unless a deliberate destructive migration is documented.
 
 Legacy migration code must attach old gate rows to deterministic attempt records.
 
-## 30. Tests must cover negative paths
+## 31. Tests must cover negative paths
 
 Any new authority path requires tests for failure behavior.
 

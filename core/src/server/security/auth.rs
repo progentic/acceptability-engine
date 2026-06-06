@@ -6,6 +6,17 @@ const AUTHORIZATION_HEADER: &str = "authorization";
 const API_KEY_HEADER: &str = "x-api-key";
 const BEARER_PREFIX: &str = "Bearer ";
 const WILDCARD_REPO: &str = "*";
+const PLACEHOLDER_TOKENS: &[&str] = &[
+    "changeme",
+    "change-me",
+    "placeholder",
+    "default",
+    "example",
+    "replace-me",
+    "replace_this",
+    "replace-this",
+    "your-token-here",
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Role {
@@ -119,6 +130,7 @@ pub fn authenticate_api_key(
 
 pub fn parse_api_key_entry(entry: &str) -> Result<ApiKey, String> {
     let fields = split_entry_fields(entry)?;
+    validate_token(fields[0])?;
     let role = parse_role(fields[1])?;
     let prefixes = parse_repo_prefixes(fields[3])?;
     Ok(ApiKey::new(
@@ -165,6 +177,14 @@ fn split_entry_fields(entry: &str) -> Result<Vec<&str>, String> {
         return Err("API key entry fields must not be empty".to_string());
     }
     Ok(fields)
+}
+
+fn validate_token(token: &str) -> Result<(), String> {
+    let normalized = token.trim().to_ascii_lowercase();
+    if PLACEHOLDER_TOKENS.contains(&normalized.as_str()) {
+        return Err(format!("API key token '{token}' is a placeholder"));
+    }
+    Ok(())
 }
 
 fn parse_role(value: &str) -> Result<Role, String> {
@@ -222,6 +242,45 @@ mod tests {
 
         assert!(key.identity.can_submit());
         assert_eq!(key.identity.tenant_id, "tenant-a");
+    }
+
+    #[test]
+    fn accepts_non_placeholder_api_key_entry() {
+        let key = parse_api_key_entry("prod-token-001|viewer|tenant-a|*").unwrap();
+
+        assert!(key.identity.can_read());
+    }
+
+    #[test]
+    fn rejects_exact_deployment_placeholder_api_key() {
+        let result = parse_api_key_entry("replace-me|admin|default|*");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_placeholder_api_key_tokens() {
+        for token in PLACEHOLDER_TOKENS {
+            let entry = format!("{token}|viewer|tenant-a|*");
+
+            let result = parse_api_key_entry(&entry);
+
+            assert!(result.is_err(), "accepted placeholder token {token}");
+        }
+    }
+
+    #[test]
+    fn rejects_empty_api_key_token() {
+        let result = parse_api_key_entry("|viewer|tenant-a|*");
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejects_whitespace_api_key_token() {
+        let result = parse_api_key_entry("   |viewer|tenant-a|*");
+
+        assert!(result.is_err());
     }
 
     #[test]

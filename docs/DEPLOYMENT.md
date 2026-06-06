@@ -70,6 +70,9 @@ Use `;` between multiple keys. Use comma-separated repository prefixes inside on
 
 Supported roles are `viewer`, `submitter`, `reviewer`, and `admin`.
 
+The server rejects known placeholder API key tokens in `api-key` mode,
+including the manifest example token `replace-me`.
+
 ## Required Environment
 
 - `AH_WORKSPACE_MODE=local` or `AH_WORKSPACE_MODE=git`
@@ -77,6 +80,10 @@ Supported roles are `viewer`, `submitter`, `reviewer`, and `admin`.
 - `AH_SANDBOX_PROFILE=kubernetes-restricted`
 - `AH_API_KEYS=token|role|tenant|repo_prefixes`
 - `RUST_LOG=core=info`
+
+`AH_API_KEYS` must not contain placeholder tokens such as `changeme`,
+`change-me`, `placeholder`, `default`, `example`, `replace-me`,
+`replace_this`, `replace-this`, or `your-token-here`.
 
 Use `local` when workspaces already exist under the configured workspace root. Use `git` when the worker should clone the contract repository into the per-run workspace before gate execution.
 

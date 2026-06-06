@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.41] - 2026-06-06 - Placeholder Credential Rejection
+
+### Added
+- **Placeholder Credential Invariant** - Added the invariant that production API-key mode must not start with placeholder credentials
+- **Startup Rejection Tests** - Added coverage for deployment placeholder, known placeholder tokens, empty token, whitespace token, and valid token acceptance
+
+### Changed
+- **API-Key Startup Validation** - `api-key` security mode now rejects known placeholder tokens before the server accepts requests
+- **D37-002 Closure** - Updated deployment docs, startup runbook, phase map, and Phase 37 security assessment to close the placeholder admin API key release blocker
+
 ## [0.0.40] - 2026-06-06 - Security Assessment
 
 ### Added

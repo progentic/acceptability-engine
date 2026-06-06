@@ -1000,7 +1000,7 @@ Notes / Deviations
 
 * D25-002 is residual risk: production containment architecture exists, and Phase 40 must decide whether deployment-enforced Kubernetes containment plus Rust runner hardening is sufficient for release.
 * D37-001 is open, medium severity, not a release blocker, and required before v1.0: `cargo deny check` fails license governance because no explicit deny config/license allowlist exists and the local crate lacks a license expression.
-* D37-002 is open, high severity, and release-blocking: the Kubernetes manifest contains a placeholder admin wildcard API key that must be rejected by startup or prevented by deployment tooling before production release.
+* D37-002 is closed: startup rejects known placeholder API key tokens, including the Kubernetes manifest example token, before the server accepts requests.
 * The penetration testing report is source-grounded and local-control based; no third-party dynamic penetration test was executed.
 * `INVARIANTS.md` was inspected; no new invariant was required.
 
