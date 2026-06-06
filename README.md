@@ -46,22 +46,145 @@ SQLite descriptors.
 
 This repository is Pre-Alpha software and is under active development. For a complete timeline of historical implementations, system refinements, and framework updates, review [CHANGELOG.md](CHANGELOG.md).
 
+## Installation
+
+Install from a release archive when you want the packaged command-line binary
+and bundled operator documentation. Download the archive for your platform from
+the GitHub Release, unpack it, and put the `acceptability-engine` binary on
+your `PATH`.
+
+```bash
+tar -xzf acceptability-engine-v1.0.0-linux-x86_64.tar.gz
+cd acceptability-engine-v1.0.0-linux-x86_64
+./acceptability-engine --help
+```
+
+Build from source when you are developing the engine:
+
+```bash
+cd core
+cargo build --release --locked
+```
+
+The built binary is available at `core/target/release/core`. The release
+workflow publishes it as `acceptability-engine`.
+
+## First Run
+
+Create the runtime directories first:
+
+```bash
+mkdir -p workspaces artifacts
+```
+
+Start the HTTP API for local development:
+
+```bash
+AH_WORKSPACE_MODE=local \
+AH_SANDBOX_PROFILE=development \
+core/target/release/core \
+  --workspace ./workspaces \
+  --database ./evidence.db \
+  --artifact-root ./artifacts \
+  --port 8080
+```
+
+Check the service:
+
+```bash
+curl http://127.0.0.1:8080/health/live
+curl http://127.0.0.1:8080/health/ready
+```
+
+Run one contract directly from the CLI:
+
+```bash
+AH_WORKSPACE_MODE=git \
+AH_SANDBOX_PROFILE=development \
+core/target/release/core \
+  --contract ./contract.json \
+  --workspace ./workspaces \
+  --database ./evidence.db \
+  --artifact-root ./artifacts
+```
+
+A contract must identify the admitted Git object with `candidate_sha`:
+
+```json
+{
+  "id": "example-run",
+  "repo_url": "https://github.com/progentic/acceptability-engine.git",
+  "base_sha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidate_sha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "candidate_ref": "refs/pull/123/head",
+  "scopes": ["core/src"],
+  "requires_human_review": false,
+  "admission_policy": {
+    "id": "strict-v1",
+    "version": 1
+  }
+}
+```
+
+`candidate_ref` is provenance only. The admitted change is the diff from
+`base_sha` to `candidate_sha`.
+
 ## Workspace Mode
 
-The engine supports explicit local workspace selection and Git materialization.
+The engine supports two workspace modes.
 
-Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under the configured `--workspace` root. Each contract ID resolves to a single child directory under that root, and Gate 2 verifies that directory is a local Git work tree with the requested `base_sha`.
+Use `AH_WORKSPACE_MODE=local` when each contract workspace already exists under
+the configured `--workspace` root. The runtime resolves each contract ID to one
+child directory and verifies that it is a Git work tree with the requested
+history.
 
-Set `AH_WORKSPACE_MODE=git` to clone the contract repository into `--workspace/<contract-id>` before gate execution. Git mode cleans the selected per-run workspace, clones without recursive submodules, verifies `origin`, verifies `base_sha`, verifies `candidate_sha`, checks out `candidate_sha`, verifies `HEAD == candidate_sha`, and Gate 3 evaluates `base_sha..candidate_sha`.
+Use `AH_WORKSPACE_MODE=git` when the runtime should materialize the workspace.
+Git mode clones the contract repository into `--workspace/<contract-id>`,
+verifies `origin`, verifies `base_sha`, verifies `candidate_sha`, checks out
+`candidate_sha`, verifies `HEAD == candidate_sha`, and Gate 3 evaluates
+`base_sha..candidate_sha`.
 
 ## Sandbox Profile
 
-Set `AH_SANDBOX_PROFILE=development` for local development.
+Sandbox mode is selected with `AH_SANDBOX_PROFILE`.
 
-Set `AH_SANDBOX_PROFILE=kubernetes-restricted` for the documented production
-Kubernetes profile. That profile expects non-root execution, no privilege
-escalation, dropped Linux capabilities, RuntimeDefault seccomp, a read-only root
-filesystem, explicit writable mounts, CPU/memory limits, and denied pod egress.
+Use `AH_SANDBOX_PROFILE=development` for local development. This profile keeps
+the runner easy to start on a developer machine. It is not the production
+containment boundary.
+
+Use `AH_SANDBOX_PROFILE=kubernetes-restricted` for the documented production
+Kubernetes deployment. That profile expects the pod runtime to enforce:
+
+- non-root execution
+- no privilege escalation
+- dropped Linux capabilities
+- RuntimeDefault seccomp
+- read-only root filesystem
+- explicit writable mounts
+- CPU and memory limits
+- denied pod egress by default
+
+The Rust runner also applies process hardening, timeout cleanup, bounded output,
+and environment scrubbing. The restricted profile is the accepted v1.0
+deployment model; it is not a microVM or custom seccomp sandbox.
+
+## Container
+
+Build the local image:
+
+```bash
+docker build -t acceptability-engine:local .
+```
+
+Run the local Compose stack:
+
+```bash
+docker compose up --build
+```
+
+Compose uses the `development` sandbox profile with local container hardening.
+Use Kubernetes plus `AH_SANDBOX_PROFILE=kubernetes-restricted` for the
+production deployment model.
 
 ## Browser UI
 
@@ -89,6 +212,14 @@ The UI proxies `/api` to `http://127.0.0.1:8080` by default. Use the API field i
 Deployment assets are under `Dockerfile`, `compose.yaml`, and `deploy/kubernetes.yaml`.
 
 See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for health probes, metrics, container runtime, Kubernetes, and production environment settings.
+
+Production API-key mode requires `AH_API_KEYS` entries in this form:
+
+```text
+token|role|tenant|repo_prefixes
+```
+
+The server rejects empty, whitespace-only, and known placeholder API key tokens.
 
 ## License & Attribution
 
