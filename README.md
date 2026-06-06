@@ -18,63 +18,33 @@ The Acceptability Review Engine is an automated gatekeeper that checks software 
 
 ---
 
-## Core Data Flow Matrix
+## System Shape
 
-```text
-[ HTTP POST /runs OR CLI --contract ] 
-               │
-               ▼  [ Consumer Contract Ingestion ]
-   ┌───────────────────────────┐
-   │  Rust Orchestrator        │ ◄─── Updates DB & Generates Telemetry
-   │  (Axum Server / CLI)      │
-   └───────────┬───────────────┘
-               │
-               ▼  [ Materialize Workspace ]
- ┌───────────────────────────────┐
- │  Gate 2: Workspace Setup      │ ─── (fs::create_dir_all, Zero-Network)
- └─────────────┬─────────────────┘
-               │
-               ▼  [ Sequential Gate Evaluation Pipeline ]
- ┌───────────────────────────────────────────────────────────────────────────────┐
- │ Gate 1: Contract Validation (Static Schema Checks)                            │
- │    │                                                                          │
- │    ▼                                                                          │
- │ Gate 3: Change Boundaries (git diff --name-only vs base_sha)                  │
- │    │                                                                          │
- │    ▼                                                                          │
- │ Gate 4: Code Formatting (cargo fmt --check) ──► 300s timeout                  │
- │    │                                                                          │
- │    ▼                                                                          │
- │ Gate 5: Static Analysis (cargo clippy -D warnings) ──► 300s timeout           │
- │    │                                                                          │
- │    ▼                                                                          │
- │ Gate 6: Compilation (cargo build) ──► 600s timeout                            │
- │    │                                                                          │
- │    ▼                                                                          │
- │ Gate 7: Test Suite (cargo test --format json) ──► 1800s timeout               │
- └────────────────────────────────┬──────────────────────────────────────────────┘
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-[ APPROVE: Admissible Output ]                   [ REJECT: Telemetry Dump ]
-  • INSERT SQLite: runs.status='APPROVED'          • INSERT SQLite: runs.status='REJECTED'
-  • INSERT gate_runs: 7 rows with metrics          • INSERT gate_runs: partial rows up to failure
-  • HTTP 200: {"status":"APPROVED"}                • HTTP 200: {"status":"REJECTED","reason":"Gate N..."}
-  • CLI exit 0                                     • CLI exit 2
+The authoritative system design is documented in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-[ HTTP GET /runs OR GET /runs/:id ]
-               │
-               ▼  [ Observability Plane ]
-   ┌───────────────────────────┐
-   │  SQLite Evidence Store    │ ◄─── Arc<Mutex<Connection>>
-   │  (contracts, runs,        │      CONCURRENCY: Serialized writes.
-   │   gate_runs tables)       │      Layer 8: migrate to sqlx::SqlitePool
-   └───────────────────────────┘
-```
+The admitted object is `candidate_sha`. Contracts identify:
+
+- repository URL
+- `base_sha`
+- `candidate_sha`
+- optional `candidate_ref` provenance
+- allowed scopes
+- admission policy
+- human review requirement
+
+The Rust authority plane validates the contract, materializes the workspace,
+executes the sequential gates, records evidence, evaluates policy, and finalizes
+the run. The TypeScript UI is an operator interface that reads state and submits
+requests through the Rust API.
+
+The evidence store records contracts, runs, attempts, gate runs, policy
+evaluations, review decisions, evidence descriptors, final decisions, and audit
+events. Filesystem artifacts store larger evidence payloads referenced by
+SQLite descriptors.
 
 ## Development Status
 
-This repository is Pre-Alpha software and is under active development. For a complete timeline of historical implementations, system refinements, and framework updates, please review the project (CHANGELOG)[CHANGELOG].
+This repository is Pre-Alpha software and is under active development. For a complete timeline of historical implementations, system refinements, and framework updates, review [CHANGELOG.md](CHANGELOG.md).
 
 ## Workspace Mode
 
@@ -82,7 +52,7 @@ The engine supports explicit local workspace selection and Git materialization.
 
 Set `AH_WORKSPACE_MODE=local` to run against workspaces that already exist under the configured `--workspace` root. Each contract ID resolves to a single child directory under that root, and Gate 2 verifies that directory is a local Git work tree with the requested `base_sha`.
 
-Set `AH_WORKSPACE_MODE=git` to clone the contract repository into `--workspace/<contract-id>` before gate execution. Git mode cleans the selected per-run workspace, clones without recursive submodules, verifies `origin`, detaches `HEAD`, and verifies the requested `base_sha`.
+Set `AH_WORKSPACE_MODE=git` to clone the contract repository into `--workspace/<contract-id>` before gate execution. Git mode cleans the selected per-run workspace, clones without recursive submodules, verifies `origin`, verifies `base_sha`, verifies `candidate_sha`, checks out `candidate_sha`, verifies `HEAD == candidate_sha`, and Gate 3 evaluates `base_sha..candidate_sha`.
 
 ## Sandbox Profile
 

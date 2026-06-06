@@ -1008,16 +1008,54 @@ Notes / Deviations
 PHASE 38 DOCUMENTATION FREEZE
 ==============================
 
+Task
+
+Freeze release documentation.
+
+Goal
+
+Produce evidence that documented capabilities, implemented capabilities, and
+authoritative documents agree before release-candidate work begins.
+
+Non-Goals
+
+* New runtime behavior
+* New API behavior
+* New persistence behavior
+* New security behavior
+
 Acceptance Evidence
 
-* documentation audit
-* API audit
-* deployment audit
-* release documentation package
+* `docs/reviews/PHASE38_DOCUMENTATION_FREEZE.md` records the documentation audit.
+* Capability coverage review records implemented, documented, authoritative document, and evidence status for release-relevant capabilities.
+* Documentation coverage review records API, contract, gate, state, evidence, deployment, operator, supply-chain, and README coverage.
+* Cross-document consistency review compares architecture, invariants, phase map, deployment, API, operations, license governance, runbooks, and review artifacts.
+* Release documentation package is inventoried.
 
 Documentation Updates
 
-All documentation finalized.
+* `README.md` removed stale pre-production flow text and now points to the authoritative architecture.
+* `CHANGELOG.md` records version `0.0.43 - Documentation Freeze`.
+
+Commands Ran
+
+* `git diff --check`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+* `cargo deny check`
+* `cargo audit --no-fetch --stale`
+
+Summary
+
+Phase 38 freezes the current documentation package. The audit found no
+undocumented release-relevant capability, no documented-but-missing current
+capability, and no contradictory authoritative document.
+
+Notes / Deviations
+
+* Historical review artifacts intentionally retain the status that was true at their phase closure. Later PHASEMAP entries record closure or reclassification.
+* D25-002 remains the only open release-risk item and is carried to Phase 40 as a production governance decision.
 
 ============================
 PHASE 39 RELEASE CANDIDATE

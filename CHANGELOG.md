@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.43] - 2026-06-06 - Documentation Freeze
+
+### Added
+- **Phase 38 Freeze Audit** - Added `docs/reviews/PHASE38_DOCUMENTATION_FREEZE.md` with capability coverage, documentation coverage, cross-document consistency, and release documentation package evidence
+
+### Changed
+- **README Documentation Alignment** - Replaced stale pre-production flow text with the current candidate-SHA admission model and authoritative architecture reference
+- **Phase 38 Closure Evidence** - Updated PHASEMAP with documentation freeze acceptance evidence, validation commands, summary, and remaining D25-002 governance decision
+
 ## [0.0.42] - 2026-06-06 - License Governance
 
 ### Added
