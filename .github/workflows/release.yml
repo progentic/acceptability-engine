@@ -1,0 +1,147 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to package, for example v1.0.0"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  CARGO_BUILD_JOBS: "1"
+  CARGO_INCREMENTAL: "0"
+  RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+
+jobs:
+  build:
+    name: Build ${{ matrix.asset }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            asset: linux-x86_64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            asset: macos-x86_64
+          - os: macos-14
+            target: aarch64-apple-darwin
+            asset: macos-aarch64
+
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Install Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+
+      - name: Use Rust stable
+        run: rustup default stable
+
+      - name: Add target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build release binary
+        working-directory: core
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package release archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset="acceptability-engine-${RELEASE_TAG}-${{ matrix.asset }}"
+          package_dir="dist/${asset}"
+          archive="${asset}.tar.gz"
+
+          mkdir -p "${package_dir}/core"
+          cp "core/target/${{ matrix.target }}/release/core" "${package_dir}/acceptability-engine"
+          chmod +x "${package_dir}/acceptability-engine"
+          cp README.md CHANGELOG.md LICENSE "${package_dir}/"
+          cp compose.yaml Dockerfile "${package_dir}/"
+          cp -R deploy docs "${package_dir}/"
+          cp core/deny.toml "${package_dir}/core/"
+          cp -R core/migrations "${package_dir}/core/"
+          find "${package_dir}" -name .DS_Store -delete
+
+          tar -czf "dist/${archive}" -C "dist" "${asset}"
+          (
+            cd dist
+            shasum -a 256 "${archive}" > "${archive}.sha256"
+          )
+
+      - name: Upload packaged archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.asset }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: build
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Download packaged archives
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          pattern: release-*
+          merge-multiple: true
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > release-notes.md <<'NOTES'
+          Acceptability Review Engine production release.
+
+          This release includes packaged command-line binaries for Linux and macOS.
+
+          Deployment readiness is scoped to the documented controlled Kubernetes
+          deployment model using the kubernetes-restricted profile plus Rust runner
+          hardening. See docs/reviews/PHASE41_PRODUCTION_RELEASE.md for the release
+          declaration and accepted residual risk.
+          NOTES
+
+      - name: Publish release files
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "${RELEASE_TAG}" >/dev/null 2>&1; then
+            gh release edit "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file release-notes.md
+          else
+            gh release create "${RELEASE_TAG}" \
+              --title "${RELEASE_TAG}" \
+              --notes-file release-notes.md \
+              --verify-tag
+          fi
+
+          gh release upload "${RELEASE_TAG}" dist/* --clobber
