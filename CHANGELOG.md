@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.40] - 2026-06-06 - Security Assessment
+
+### Added
+- **Phase 37 Security Report** - Added `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md` with threat model, source-grounded penetration testing report, dependency assessment, and remediation inventory
+- **Security Remediation Inventory** - Recorded D25-002 sandbox residual risk, D37-001 non-blocking v1.0 supply-chain license policy gap, and D37-002 release-blocking placeholder API key deployment risk
+
+### Changed
+- **Roadmap Security Status** - Updated `docs/PHASEMAP.md` to record Phase 37 acceptance evidence, validation commands, residual risks, and security-assessment deviations
+- **Architecture Review Index** - Updated `docs/ARCHITECTURE.md` to link the Phase 37 security assessment as review evidence
+- **Sandbox Review Wording** - Removed stale D25-001 dependency language from the Phase 31 sandbox network-model note
+
 ## [0.0.39] - 2026-06-05 - Candidate SHA Admission Boundary
 
 ### Added

@@ -975,16 +975,34 @@ SECURITY ASSESSMENT
 
 Acceptance Evidence
 
-* threat model
-* penetration testing report
-* dependency assessment
-* remediation inventory
+* `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md` records the threat model.
+* `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md` records the source-grounded penetration testing report.
+* `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md` records the dependency assessment.
+* `docs/reviews/PHASE37_SECURITY_ASSESSMENT.md` records the remediation inventory.
 
 Documentation Updates
 
-* ARCHITECTURE.md
-* INVARIANTS.md
-* CHANGELOG.md
+* `ARCHITECTURE.md` records the Phase 37 review artifact.
+* `PHASEMAP.md` records Phase 37 acceptance evidence.
+* `CHANGELOG.md` records version `0.0.40 - Security Assessment`.
+
+Commands Ran
+
+* `cargo test`
+* `cargo audit`
+* `cargo deny check`
+
+Summary
+
+Phase 37 validates the core admission security model after D25-001. Candidate SHA authority, repository policy, tenant isolation, review authorization, policy evaluation, retention safety, replay integrity, and audit evidence are coherent.
+
+Notes / Deviations
+
+* D25-002 is residual risk: production containment architecture exists, and Phase 40 must decide whether deployment-enforced Kubernetes containment plus Rust runner hardening is sufficient for release.
+* D37-001 is open, medium severity, not a release blocker, and required before v1.0: `cargo deny check` fails license governance because no explicit deny config/license allowlist exists and the local crate lacks a license expression.
+* D37-002 is open, high severity, and release-blocking: the Kubernetes manifest contains a placeholder admin wildcard API key that must be rejected by startup or prevented by deployment tooling before production release.
+* The penetration testing report is source-grounded and local-control based; no third-party dynamic penetration test was executed.
+* `INVARIANTS.md` was inspected; no new invariant was required.
 
 ==============================
 PHASE 38 DOCUMENTATION FREEZE

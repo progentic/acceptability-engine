@@ -44,8 +44,7 @@ The Kubernetes deployment adds a NetworkPolicy for the engine pod.
 Ingress is limited to port `8080`. Egress is denied by default.
 
 This profile is compatible with local workspace mode. Git materialization that
-requires outbound clone access needs a deliberate future egress policy and is
-still blocked by D25-001 candidate-change acquisition.
+requires outbound clone access needs a deliberate egress policy.
 
 ## Syscall Model
 
