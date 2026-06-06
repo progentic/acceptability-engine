@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **v1.0.0 Asset Path** - Existing tags such as `v1.0.0` can be packaged through manual workflow dispatch using the tag input, while future `v*` tag pushes publish release files automatically
 - **README Installation Guidance** - Reworked the README body around release archive installation, source builds, first-run commands, workspace modes, sandbox profiles, container startup, and API-key setup while preserving the marketing-forward header
+- **README Release Status** - Removed the stale Pre-Alpha development status from the README now that the project has a v1.0.0 production release record
 
 ## [1.0.0] - 2026-06-06 - Production Release
 

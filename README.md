@@ -42,10 +42,6 @@ evaluations, review decisions, evidence descriptors, final decisions, and audit
 events. Filesystem artifacts store larger evidence payloads referenced by
 SQLite descriptors.
 
-## Development Status
-
-This repository is Pre-Alpha software and is under active development. For a complete timeline of historical implementations, system refinements, and framework updates, review [CHANGELOG.md](CHANGELOG.md).
-
 ## Installation
 
 Install from a release archive when you want the packaged command-line binary
