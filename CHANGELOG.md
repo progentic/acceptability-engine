@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.0.44] - 2026-06-06 - Release Candidate Evidence
+
+### Added
+- **Phase 39 Release Candidate Report** - Added `docs/reviews/PHASE39_RELEASE_CANDIDATE.md` with release candidate identity, evidence coverage matrix, validation inventory, security inventory, documentation inventory, operational inventory, known limitations, and go/no-go recommendation
+
+### Changed
+- **Release Candidate Roadmap Status** - Updated PHASEMAP to record `v0.0.44-rc.1` evidence, validation commands, and D25-002 deferral to Phase 40 as the sole remaining production governance decision
+
 ## [0.0.43] - 2026-06-06 - Documentation Freeze
 
 ### Added

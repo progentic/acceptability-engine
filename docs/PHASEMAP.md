@@ -1061,16 +1061,55 @@ Notes / Deviations
 PHASE 39 RELEASE CANDIDATE
 ============================
 
+Task
+
+Assemble release-candidate evidence.
+
+Goal
+
+Produce a formal release candidate evidence binder from completed roadmap
+evidence and identify whether the project may proceed to Phase 40.
+
+Non-Goals
+
+* New runtime behavior
+* New API behavior
+* New persistence behavior
+* New security behavior
+* New deployment behavior
+
 Acceptance Evidence
 
-* release candidate tag
-* final validation report
-* CI validation report
-* deployment validation report
+* `docs/reviews/PHASE39_RELEASE_CANDIDATE.md` records the release candidate evidence binder.
+* Release candidate identity is `v0.0.44-rc.1`.
+* Evidence coverage matrix aggregates Phases 25, 30, 32, 33, 34, 35, 36, 37, and 38.
+* Validation inventory records final validation commands and results.
+* Security, documentation, and operational inventories identify no open blocker except D25-002.
+* D25-002 is explicitly deferred to Phase 40 Production Governance Review.
 
 Documentation Updates
 
 * CHANGELOG.md
+
+Commands Ran
+
+* `git diff --check`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+* `cargo deny check`
+* `cargo audit --no-fetch --stale`
+
+Summary
+
+Phase 39 creates the release-candidate evidence binder for `v0.0.44-rc.1`.
+The project may proceed to Phase 40 because no implementation, documentation,
+security remediation, operational, performance, replay, retention, recovery, or
+license-governance blocker remains open.
+
+Notes / Deviations
+
+* D25-002 remains open and is carried to Phase 40 as the sole production governance decision.
 
 =======================================
 PHASE 40 PRODUCTION GOVERNANCE REVIEW
