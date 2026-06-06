@@ -85,12 +85,27 @@ jobs:
             shasum -a 256 "${archive}" > "${archive}.sha256"
           )
 
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            dmg="${asset}.dmg"
+            hdiutil create \
+              -volname "Acceptability Engine ${RELEASE_TAG}" \
+              -srcfolder "${package_dir}" \
+              -ov \
+              -format UDZO \
+              "dist/${dmg}"
+            (
+              cd dist
+              shasum -a 256 "${dmg}" > "${dmg}.sha256"
+            )
+          fi
+
       - name: Upload packaged archive
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.asset }}
           path: |
             dist/*.tar.gz
+            dist/*.dmg
             dist/*.sha256
           if-no-files-found: error
 
@@ -120,6 +135,7 @@ jobs:
           Acceptability Review Engine production release.
 
           This release includes packaged command-line binaries for Linux and macOS.
+          macOS builds include both tar.gz archives and DMG images.
 
           Deployment readiness is scoped to the documented controlled Kubernetes
           deployment model using the kubernetes-restricted profile plus Rust runner
