@@ -346,4 +346,5 @@ Avoid hidden state, unnecessary abstraction, deep nesting, swallowed errors, unb
 Phase 25 invariant compliance evidence is recorded in `docs/reviews/PHASE25_ARCHITECTURE_REVIEW.md`.
 Phase 30 invariant compliance evidence is recorded in `docs/reviews/PHASE30_ARCHITECTURE_REVIEW.md`.
 Phase 40 production governance evidence is recorded in `docs/reviews/PHASE40_PRODUCTION_GOVERNANCE_REVIEW.md`.
+Phase 41 production release evidence is recorded in `docs/reviews/PHASE41_PRODUCTION_RELEASE.md`.
 Those reports are review evidence; this document remains the invariant authority.

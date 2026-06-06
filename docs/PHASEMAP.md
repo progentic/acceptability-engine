@@ -1182,13 +1182,12 @@ Declare production readiness.
 
 Acceptance Evidence
 
-* v1.0 release tag
-* production release checklist
-* successful CI validation
-* successful DR validation
-* successful replay validation
-* successful security validation
-* successful operational validation
+* `docs/reviews/PHASE41_PRODUCTION_RELEASE.md` records the production release.
+* Release identity is `v1.0.0`.
+* Release candidate `v0.0.44-rc.1` is promoted to `v1.0.0`.
+* Rust package version is `core 1.0.0`.
+* Validation, governance, accepted residual risk, deployment assumptions, and release declaration are recorded.
+* D25-002 remains accepted residual risk under the documented deployment model.
 
 Required Documentation
 
@@ -1201,20 +1200,28 @@ Required Documentation
 
 Commands Ran
 
-cargo fmt -- --check
-
-cargo clippy -- -D warnings
-
-cargo test
-
-docker build .
-
-docker compose config
+* `git diff --check`
+* `cargo fmt -- --check`
+* `cargo clippy -- -D warnings`
+* `cargo test`
+* `cargo deny check`
+* `cargo audit --no-fetch --stale`
+* `docker --version`
+* `docker-compose --version`
+* `docker-compose config`
+* `docker info`
 
 Summary
 
-Acceptability Engine v1.0 production release.
+Acceptability Engine v1.0 production release. The system is released under the
+documented controlled Kubernetes deployment model.
 
 Notes / Deviations
 
-None unresolved.
+* D25-002 remains accepted residual risk under Phase 40 governance.
+* Docker daemon-backed image build and runtime startup validation were unavailable locally because the Docker daemon socket was not running.
+* Future work moves from the phase-based roadmap into normal versioned release planning.
+
+v1.0.0 RELEASED
+
+No unresolved release blockers.

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-06-06 - Production Release
+
+### Added
+- **Phase 41 Production Release Record** - Added `docs/reviews/PHASE41_PRODUCTION_RELEASE.md` with release identity, release decision, version inventory, validation inventory, governance inventory, accepted residual risks, deployment assumptions, release declaration, and post-release notes
+
+### Changed
+- **Production Version** - Promoted the Rust authority package to `core 1.0.0` and prepared the repository for the `v1.0.0` release tag
+- **Roadmap Completion** - Updated architecture, invariants, and PHASEMAP release records to declare `v1.0.0` released under the documented controlled Kubernetes deployment model
+
 ## [0.0.45] - 2026-06-06 - Production Governance Review
 
 ### Added
